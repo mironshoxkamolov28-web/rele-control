@@ -119,7 +119,7 @@ export default function RelayDashboard() {
     try { return localStorage.getItem('rc_active_nav') || 'dashboard'; } catch { return 'dashboard'; }
   });
   const [newRelay, setNewRelay] = useState({
-    stationId: '', name: '', num: '', object: '', manzil: '', stativ: '', nextCheck: '', note: '',
+    stationId: '', name: '', num: '', stativ: '', nextCheck: '', note: '',
   });
   const [newStation, setNewStation] = useState({ name: '', username: '', password: '' });
   const [editingStation, setEditingStation] = useState(null);
@@ -266,7 +266,7 @@ export default function RelayDashboard() {
       setRelays([...relays, added]);
       setQrPreviewRelay(added);
     }
-    setNewRelay({ stationId: newRelay.stationId, name: '', num: '', object: '', manzil: '', stativ: '', nextCheck: '', note: '' });
+    setNewRelay({ stationId: newRelay.stationId, name: '', num: '', stativ: '', nextCheck: '', note: '' });
   };
 
   const handleAddStation = async () => {
@@ -314,7 +314,7 @@ export default function RelayDashboard() {
     doc.setFontSize(10);
     let y = 30;
     stationRelays.forEach((r, i) => {
-      doc.text(`${i + 1}. ${r.name} (${r.num}) | ${r.object} | ${r.nextCheck} [${r.status.toUpperCase()}]`, 14, y);
+      doc.text(`${i + 1}. ${r.name} (${r.num}) | ${r.nextCheck} [${r.status.toUpperCase()}]`, 14, y);
       y += 8;
     });
     doc.save('rele-hisobot.pdf');
@@ -367,7 +367,7 @@ export default function RelayDashboard() {
             </div>
             <div className="space-y-2 text-sm text-left bg-white/5 rounded-xl p-4">
               <div className="flex justify-between"><span className="text-white/40">Stansiya</span><span className="text-white font-medium">{sName}</span></div>
-              <div className="flex justify-between"><span className="text-white/40">Obyekt</span><span className="text-white font-medium">{publicRelay.object}</span></div>
+              {publicRelay.stativ && <div className="flex justify-between"><span className="text-white/40">Stativ</span><span className="text-white font-medium">{publicRelay.stativ}</span></div>}
               <div className="flex justify-between"><span className="text-white/40">Tekshiruv</span><span className="text-white font-medium">{publicRelay.nextCheck}</span></div>
               {publicRelay.note && <div className="flex justify-between"><span className="text-white/40">Izoh</span><span className="text-white/50 text-xs italic">{publicRelay.note}</span></div>}
             </div>
@@ -531,7 +531,7 @@ export default function RelayDashboard() {
                       </svg>
                     )}
                   </button>
-                  {isExpanded && item.children && (
+                  {isExpanded && item.children && auth?.id === 'admin' && (
                     <div className="ml-3 mt-1 space-y-0.5 border-l border-white/5 pl-2">
                       {item.children.map((child) => (
                         <button key={child.id} onClick={() => { setActiveNav(child.id); setSidebarOpen(false); }}
@@ -695,11 +695,9 @@ export default function RelayDashboard() {
                       <th className="px-4 py-3 font-medium">Status</th>
                       <th className="px-4 py-3 font-medium">Nomi</th>
                       <th className="px-4 py-3 font-medium">Stansiya</th>
-                      <th className="px-4 py-3 font-medium">Obyekt</th>
-                      <th className="px-4 py-3 font-medium">Manzil</th>
                       <th className="px-4 py-3 font-medium">Stativ</th>
                       <th className="px-4 py-3 font-medium">Keyingi tekshiruv</th>
-                      <th className="px-4 py-3 font-medium text-right">Amallar</th>
+                      {auth?.id === 'admin' && <th className="px-4 py-3 font-medium text-right">Amallar</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -718,28 +716,26 @@ export default function RelayDashboard() {
                             <div className="text-xs font-mono text-white/30">№ {relay.num}</div>
                           </td>
                           <td className="px-4 py-3 text-white/60">{getStationName(relay.stationId)}</td>
-                          <td className="px-4 py-3 text-white/60">{relay.object}</td>
-                          <td className="px-4 py-3 text-white/60">{relay.manzil || '—'}</td>
                           <td className="px-4 py-3 text-white/60">{relay.stativ || '—'}</td>
                           <td className="px-4 py-3 text-white/60">{relay.nextCheck}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-2">
-                              <button onClick={() => setSelectedRelay({ ...relay })}
-                                className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                                Tahrirlash
-                              </button>
-                              <button onClick={() => printQRCode(relay)}
-                                className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
-                                QR
-                              </button>
-                              {auth?.id === 'admin' && (
+                          {auth?.id === 'admin' && (
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-2">
+                                <button onClick={() => setSelectedRelay({ ...relay })}
+                                  className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                                  Tahrirlash
+                                </button>
+                                <button onClick={() => printQRCode(relay)}
+                                  className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
+                                  QR
+                                </button>
                                 <button onClick={() => { if (confirm(`${relay.name} — ${relay.num} ni o'chirasizmi?`)) handleDeleteRelay(relay.id); }}
                                   className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
                                   O'chirish
                                 </button>
-                              )}
-                            </div>
-                          </td>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -770,16 +766,6 @@ export default function RelayDashboard() {
                         <p className="text-xs font-mono text-white/30 mb-3">№ {relay.num}</p>
                         <div className="text-xs text-white/40 mb-3">{getStationName(relay.stationId)}</div>
                         <div className="space-y-1.5 text-sm">
-                          <div className="flex items-center gap-2 text-white/50">
-                            <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                            <span className="text-white/70">{relay.object}</span>
-                          </div>
-                          {relay.manzil && (
-                            <div className="flex items-center gap-2 text-white/50">
-                              <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                              <span className="text-white/70">{relay.manzil}</span>
-                            </div>
-                          )}
                           {relay.stativ && (
                             <div className="flex items-center gap-2 text-white/50">
                               <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" /></svg>
@@ -797,27 +783,27 @@ export default function RelayDashboard() {
                             </div>
                           )}
                         </div>
-                        <div className="mt-4 flex items-center justify-between pt-4 border-t border-white/5">
-                          <div className="flex gap-2">
-                            <button onClick={() => setSelectedRelay({ ...relay })}
-                              className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                              Tahrirlash
-                            </button>
-                            <button onClick={() => printQRCode(relay)}
-                              className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
-                              QR yuklash
-                            </button>
-                            {auth?.id === 'admin' && (
+                        {auth?.id === 'admin' && (
+                          <div className="mt-4 flex items-center justify-between pt-4 border-t border-white/5">
+                            <div className="flex gap-2">
+                              <button onClick={() => setSelectedRelay({ ...relay })}
+                                className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                                Tahrirlash
+                              </button>
+                              <button onClick={() => printQRCode(relay)}
+                                className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
+                                QR yuklash
+                              </button>
                               <button onClick={() => { if (confirm(`${relay.name} — ${relay.num} ni o'chirasizmi?`)) handleDeleteRelay(relay.id); }}
                                 className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
                                 O'chirish
                               </button>
-                            )}
+                            </div>
+                            <div id={`qr-${relay.id}`} className="bg-white rounded-lg p-1.5 transition-transform group-hover:scale-110">
+                              <QRCodeSVG value={qrUrl(relay)} size={44} level="H" />
+                            </div>
                           </div>
-                          <div id={`qr-${relay.id}`} className="bg-white rounded-lg p-1.5 transition-transform group-hover:scale-110">
-                            <QRCodeSVG value={qrUrl(relay)} size={44} level="H" />
-                          </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -854,16 +840,6 @@ export default function RelayDashboard() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-white/60">Zavod №</label>
                   <input value={newRelay.num} onChange={(e) => setNewRelay({ ...newRelay, num: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">Obyekt</label>
-                  <input value={newRelay.object} onChange={(e) => setNewRelay({ ...newRelay, object: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">Manzil</label>
-                  <input value={newRelay.manzil} onChange={(e) => setNewRelay({ ...newRelay, manzil: e.target.value })}
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
                 </div>
                 <div className="space-y-1.5">
@@ -1013,12 +989,6 @@ export default function RelayDashboard() {
               <div className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
                 {getStationName(selectedRelay?.stationId)}
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">Manzil</label>
-              <input value={selectedRelay?.manzil || ''}
-                onChange={(e) => setSelectedRelay({ ...selectedRelay, manzil: e.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-white/60">Stativ №</label>
