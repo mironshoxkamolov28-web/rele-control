@@ -121,6 +121,8 @@ export default function RelayDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedRelay, setSelectedRelay] = useState(null);
+  const [relayPage, setRelayPage] = useState(1);
+  const [relayPageSize, setRelayPageSize] = useState(20);
   const [auth, setAuth] = useState(() => {
     try {
       const saved = localStorage.getItem('rc_auth');
@@ -209,6 +211,10 @@ export default function RelayDashboard() {
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
   useEffect(() => {
+    setRelayPage(1);
+  }, [searchQuery, filterStatus, adminFilterStation, relayPageSize]);
+
+  useEffect(() => {
     const adminOnlyNav = ['stations', 'settings', 'add-relay', 'add-station', 'uchastkalar', 'add-uchastka'];
     if (auth && auth.id !== 'admin' && adminOnlyNav.includes(activeNav)) {
       setActiveNav('dashboard');
@@ -230,6 +236,9 @@ export default function RelayDashboard() {
       if (!b.nextCheck) return -1;
       return new Date(a.nextCheck) - new Date(b.nextCheck);
     });
+
+  const relayPageCount = Math.max(1, Math.ceil(visibleRelays.length / relayPageSize));
+  const pagedRelays = visibleRelays.slice((relayPage - 1) * relayPageSize, relayPage * relayPageSize);
 
   const stats = {
     total: stationRelays.length,
@@ -772,7 +781,7 @@ export default function RelayDashboard() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-black text-white">Relelar</h2>
-                  <p className="text-sm text-white/40 mt-1">{stationRelays.length} ta rele topildi</p>
+                  <p className="text-sm text-white/40 mt-1">{visibleRelays.length} ta rele topildi</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={exportToPDF}
@@ -820,7 +829,7 @@ export default function RelayDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleRelays.map((relay) => {
+                    {pagedRelays.map((relay) => {
                       const sc = statusConfig[relay.status];
                       return (
                         <tr key={relay.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
@@ -863,7 +872,7 @@ export default function RelayDashboard() {
               </div>
 
               <div className="md:hidden grid grid-cols-1 gap-4">
-                {visibleRelays.map((relay, idx) => {
+                {pagedRelays.map((relay, idx) => {
                   const sc = statusConfig[relay.status];
                   return (
                     <div key={relay.id}
@@ -934,6 +943,33 @@ export default function RelayDashboard() {
                   <div className="text-5xl mb-4 opacity-30">🔍</div>
                   <p className="text-lg font-semibold text-white/60">Hech qanday rele topilmadi</p>
                   <p className="text-sm text-white/30 mt-1">Qidiruv so'rovini o'zgartiring yoki filtrni tozalang</p>
+                </div>
+              )}
+
+              {visibleRelays.length > 0 && (
+                <div className="glass rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs text-white/40">
+                    <span>
+                      {visibleRelays.length === 0 ? 0 : (relayPage - 1) * relayPageSize + 1}
+                      {'–'}
+                      {Math.min(relayPage * relayPageSize, visibleRelays.length)} / {visibleRelays.length}
+                    </span>
+                    <select value={relayPageSize} onChange={(e) => setRelayPageSize(Number(e.target.value))}
+                      className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white outline-none transition focus:border-amber-500/50">
+                      {[10, 20, 50, 100].map((n) => <option key={n} value={n} className="bg-neutral-900 text-white">{n} ta</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setRelayPage((p) => Math.max(1, p - 1))} disabled={relayPage <= 1}
+                      className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
+                      Oldingi
+                    </button>
+                    <span className="text-xs text-white/50">{relayPage} / {relayPageCount}</span>
+                    <button onClick={() => setRelayPage((p) => Math.min(relayPageCount, p + 1))} disabled={relayPage >= relayPageCount}
+                      className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
+                      Keyingi
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
