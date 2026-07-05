@@ -4,8 +4,6 @@ import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 import { supabase, toRelay, fromRelay } from './supabase.js';
 
-const ADMIN_STATION = { id: 'admin', name: "ADMIN (Barcha stansiyalar)", username: 'admin', password: 'admin' };
-
 function getPublicUrl() {
   try { return localStorage.getItem('rc_public_url') || window.location.origin; } catch { return window.location.origin; }
 }
@@ -115,7 +113,7 @@ function ThemeToggle({ theme, onToggle, className = '' }) {
 }
 
 export default function RelayDashboard() {
-  const [stations, setStations] = useState([ADMIN_STATION]);
+  const [stations, setStations] = useState([]);
   const [relays, setRelays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [publicRelay, setPublicRelay] = useState(null);
@@ -184,13 +182,13 @@ export default function RelayDashboard() {
     const isPublicPage = /^\/relay\/\d+$/.test(window.location.pathname);
     if (isPublicPage) { setLoading(false); return; }
     Promise.all([
-      supabase.from('stations').select('*'),
+      supabase.from('stations').select('id,name,username,uchastka_id'),
       supabase.from('relays').select('*'),
       supabase.from('uchastkalar').select('*'),
     ]).then(([{ data: stationsData }, { data: relaysData }, { data: uchastkalarData }]) => {
       if (stationsData) {
-        setStations([ADMIN_STATION, ...stationsData]);
-        const firstStation = stationsData[0];
+        setStations(stationsData);
+        const firstStation = stationsData.find((s) => s.id !== 'admin');
         if (firstStation) setNewRelay((r) => ({ ...r, stationId: firstStation.id }));
       }
       if (relaysData) setRelays(relaysData.map(toRelay));
@@ -261,12 +259,15 @@ export default function RelayDashboard() {
     link.click();
   };
 
-  const handleLogin = (event) => {
+  const handleLogin = async (event) => {
     event.preventDefault();
-    const station = stations.find(
-      (s) => s.id === loginStation && s.username === loginUsername && s.password === loginPassword
-    );
-    if (!station) {
+    const { data, error } = await supabase.rpc('verify_station_login', {
+      p_id: loginStation,
+      p_username: loginUsername,
+      p_password: loginPassword,
+    });
+    const station = data?.[0];
+    if (error || !station) {
       setLoginError('Login yoki parol noto\'g\'ri.');
       return;
     }
@@ -316,9 +317,11 @@ export default function RelayDashboard() {
       setStationFormError(`"${newStation.username}" login nomi band. Boshqa login nomi tanlang.`);
       return;
     }
-    const row = { id: newId, name: newStation.name, username: newStation.username, password: newStation.password, uchastka_id: newStation.uchastkaId || null };
+    const row = { id: newId, name: newStation.name, username: newStation.username, uchastka_id: newStation.uchastkaId || null };
     const { error } = await supabase.from('stations').insert(row);
     if (error) { setStationFormError(error.message); return; }
+    const { error: pwError } = await supabase.rpc('set_station_password', { p_id: newId, p_password: newStation.password });
+    if (pwError) { setStationFormError(pwError.message); return; }
     setStations([...stations, row]);
     setNewStation({ name: '', username: '', password: '', uchastkaId: '' });
   };
@@ -332,21 +335,24 @@ export default function RelayDashboard() {
       setStationFormError(`"${editingStation.username}" login nomi band. Boshqa login nomi tanlang.`);
       return;
     }
-    const row = { id: newId, name: editingStation.name, username: editingStation.username, password: editingStation.password, uchastka_id: editingStation.uchastka_id || null };
+    const row = { id: newId, name: editingStation.name, username: editingStation.username, uchastka_id: editingStation.uchastka_id || null };
     if (oldId !== newId) {
-      // Relelar hali eski ID ga bog'liq bo'lgani uchun avval eskisini o'zgartirib bo'lmaydi
-      // (tashqi kalit buzilishi mumkin) — shuning uchun yangi qatorni qo'shib, relelarni
-      // ko'chirib, so'ng eski qatorni o'chiramiz.
-      const { error: insertError } = await supabase.from('stations').insert(row);
-      if (insertError) { setStationFormError(insertError.message); return; }
-      const { error: relayError } = await supabase.from('relays').update({ station_id: newId }).eq('station_id', oldId);
-      if (relayError) { setStationFormError(relayError.message); return; }
-      const { error: deleteError } = await supabase.from('stations').delete().eq('id', oldId);
-      if (deleteError) { setStationFormError(deleteError.message); return; }
+      // Login o'zgarsa ID ham o'zgaradi — parol hash'i va relelarni yangi ID'ga
+      // xavfsiz ko'chirish uchun server-tomon funksiyani chaqiramiz.
+      const { error: renameError } = await supabase.rpc('rename_station', {
+        p_old_id: oldId, p_new_id: newId, p_name: row.name, p_username: row.username, p_uchastka_id: row.uchastka_id,
+      });
+      if (renameError) { setStationFormError(renameError.message); return; }
       setRelays(relays.map((r) => r.stationId === oldId ? { ...r, stationId: newId } : r));
     } else {
-      const { error } = await supabase.from('stations').update(row).eq('id', oldId);
+      const { error } = await supabase.from('stations')
+        .update({ name: row.name, username: row.username, uchastka_id: row.uchastka_id })
+        .eq('id', oldId);
       if (error) { setStationFormError(error.message); return; }
+    }
+    if (editingStation.password.trim()) {
+      const { error: pwError } = await supabase.rpc('set_station_password', { p_id: newId, p_password: editingStation.password.trim() });
+      if (pwError) { setStationFormError(pwError.message); return; }
     }
     setStations(stations.map((s) => s.id === oldId ? row : s));
     setEditingStation(null);
@@ -745,7 +751,7 @@ export default function RelayDashboard() {
                         <p className="text-xs text-white/40">Login: <span className="font-mono text-white/50">{s.username}</span> &middot; {count} ta rele &middot; Uchastka: {getUchastkaName(s.uchastka_id)}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => setEditingStation({ _originalId: s.id, name: s.name, username: s.username, password: s.password, uchastka_id: s.uchastka_id || '' })}
+                        <button onClick={() => setEditingStation({ _originalId: s.id, name: s.name, username: s.username, password: '', uchastka_id: s.uchastka_id || '' })}
                           className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                           Tahrirlash
                         </button>
@@ -1277,9 +1283,11 @@ export default function RelayDashboard() {
               <p className="text-[10px] text-white/30">Login o'zgartirilsa, stansiya ID si ham yangilanadi</p>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">Parol</label>
+              <label className="text-xs font-medium text-white/60">Yangi parol</label>
               <input type="password" value={editingStation?.password || ''} onChange={(e) => setEditingStation({ ...editingStation, password: e.target.value })}
+                placeholder="O'zgartirmaslik uchun bo'sh qoldiring"
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
+              <p className="text-[10px] text-white/30">Xavfsizlik uchun joriy parol ko'rsatilmaydi. Faqat almashtirish uchun to'ldiring.</p>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-white/60">Uchastka</label>
