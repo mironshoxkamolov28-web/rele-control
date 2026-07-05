@@ -126,10 +126,12 @@ export default function RelayDashboard() {
   const [newStation, setNewStation] = useState({ name: '', username: '', password: '', uchastkaId: '' });
   const [editingStation, setEditingStation] = useState(null);
   const [deleteStationId, setDeleteStationId] = useState(null);
+  const [stationFormError, setStationFormError] = useState('');
   const [uchastkalar, setUchastkalar] = useState([]);
   const [newUchastka, setNewUchastka] = useState({ name: '' });
   const [editingUchastka, setEditingUchastka] = useState(null);
   const [deleteUchastkaId, setDeleteUchastkaId] = useState(null);
+  const [uchastkaFormError, setUchastkaFormError] = useState('');
   const [qrPreviewRelay, setQrPreviewRelay] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [publicUrl, setPublicUrl] = useState(() => {
@@ -279,24 +281,44 @@ export default function RelayDashboard() {
   };
 
   const handleAddStation = async () => {
+    setStationFormError('');
     if (!newStation.name.trim() || !newStation.username.trim() || !newStation.password.trim()) return;
     const newId = newStation.username.trim().toLowerCase().replace(/\s+/g, '-');
-    if (stations.some((s) => s.id === newId)) return;
+    if (stations.some((s) => s.id === newId)) {
+      setStationFormError(`"${newStation.username}" login nomi band. Boshqa login nomi tanlang.`);
+      return;
+    }
     const row = { id: newId, name: newStation.name, username: newStation.username, password: newStation.password, uchastka_id: newStation.uchastkaId || null };
-    await supabase.from('stations').insert(row);
+    const { error } = await supabase.from('stations').insert(row);
+    if (error) { setStationFormError(error.message); return; }
     setStations([...stations, row]);
     setNewStation({ name: '', username: '', password: '', uchastkaId: '' });
   };
 
   const handleUpdateStation = async () => {
     if (!editingStation) return;
+    setStationFormError('');
     const oldId = editingStation._originalId;
     const newId = editingStation.username.trim().toLowerCase().replace(/\s+/g, '-');
+    if (newId !== oldId && stations.some((s) => s.id === newId)) {
+      setStationFormError(`"${editingStation.username}" login nomi band. Boshqa login nomi tanlang.`);
+      return;
+    }
     const row = { id: newId, name: editingStation.name, username: editingStation.username, password: editingStation.password, uchastka_id: editingStation.uchastka_id || null };
-    await supabase.from('stations').update(row).eq('id', oldId);
     if (oldId !== newId) {
-      await supabase.from('relays').update({ station_id: newId }).eq('station_id', oldId);
+      // Relelar hali eski ID ga bog'liq bo'lgani uchun avval eskisini o'zgartirib bo'lmaydi
+      // (tashqi kalit buzilishi mumkin) — shuning uchun yangi qatorni qo'shib, relelarni
+      // ko'chirib, so'ng eski qatorni o'chiramiz.
+      const { error: insertError } = await supabase.from('stations').insert(row);
+      if (insertError) { setStationFormError(insertError.message); return; }
+      const { error: relayError } = await supabase.from('relays').update({ station_id: newId }).eq('station_id', oldId);
+      if (relayError) { setStationFormError(relayError.message); return; }
+      const { error: deleteError } = await supabase.from('stations').delete().eq('id', oldId);
+      if (deleteError) { setStationFormError(deleteError.message); return; }
       setRelays(relays.map((r) => r.stationId === oldId ? { ...r, stationId: newId } : r));
+    } else {
+      const { error } = await supabase.from('stations').update(row).eq('id', oldId);
+      if (error) { setStationFormError(error.message); return; }
     }
     setStations(stations.map((s) => s.id === oldId ? row : s));
     setEditingStation(null);
@@ -317,11 +339,16 @@ export default function RelayDashboard() {
   };
 
   const handleAddUchastka = async () => {
+    setUchastkaFormError('');
     if (!newUchastka.name.trim()) return;
     const newId = newUchastka.name.trim().toLowerCase().replace(/\s+/g, '-');
-    if (uchastkalar.some((u) => u.id === newId)) return;
+    if (uchastkalar.some((u) => u.id === newId)) {
+      setUchastkaFormError(`"${newUchastka.name}" nomli uchastka allaqachon mavjud.`);
+      return;
+    }
     const row = { id: newId, name: newUchastka.name };
-    await supabase.from('uchastkalar').insert(row);
+    const { error } = await supabase.from('uchastkalar').insert(row);
+    if (error) { setUchastkaFormError(error.message); return; }
     setUchastkalar([...uchastkalar, row]);
     setNewUchastka({ name: '' });
   };
@@ -329,7 +356,8 @@ export default function RelayDashboard() {
   const handleUpdateUchastka = async () => {
     if (!editingUchastka) return;
     const row = { id: editingUchastka.id, name: editingUchastka.name };
-    await supabase.from('uchastkalar').update(row).eq('id', row.id);
+    const { error } = await supabase.from('uchastkalar').update(row).eq('id', row.id);
+    if (error) return;
     setUchastkalar(uchastkalar.map((u) => u.id === row.id ? row : u));
     setEditingUchastka(null);
   };
@@ -952,12 +980,15 @@ export default function RelayDashboard() {
                   </select>
                 </div>
               </div>
+              {stationFormError && (
+                <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{stationFormError}</div>
+              )}
               <div className="mt-5 flex gap-3">
                 <button onClick={handleAddStation}
                   className="rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 px-6 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98]">
                   Stansiya qo'shish
                 </button>
-                <button onClick={() => setActiveNav('relays')}
+                <button onClick={() => { setStationFormError(''); setActiveNav('relays'); }}
                   className="rounded-xl bg-white/10 px-6 py-3 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
                   Bekor qilish
                 </button>
@@ -971,38 +1002,82 @@ export default function RelayDashboard() {
                 <h2 className="text-2xl font-black text-white">Uchastkalar</h2>
                 <p className="text-sm text-white/40 mt-1">Uchastkalar bo'yicha stansiya va relelar soni</p>
               </div>
-              <div className="space-y-3">
-                {uchastkalar.map((u) => {
-                  const stationIds = stations.filter((s) => s.uchastka_id === u.id).map((s) => s.id);
-                  const relayCount = relays.filter((r) => stationIds.includes(r.stationId)).length;
-                  return (
-                    <div key={u.id} className="glass rounded-2xl p-4 flex items-center gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400/20 to-sky-500/20 text-cyan-400 font-bold">
-                        {u.name.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-white">{u.name}</p>
-                        <p className="text-xs text-white/40">{stationIds.length} ta stansiya &middot; {relayCount} ta rele</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setEditingUchastka({ id: u.id, name: u.name })}
-                          className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                          Tahrirlash
-                        </button>
-                        <button onClick={() => setDeleteUchastkaId(u.id)}
-                          className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
-                          O'chirish
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-                {uchastkalar.length === 0 && (
-                  <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                    <p className="text-sm text-white/40">Hali uchastka qo'shilmagan</p>
+
+              {uchastkalar.length === 0 ? (
+                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
+                  <p className="text-sm text-white/40">Hali uchastka qo'shilmagan</p>
+                </div>
+              ) : (
+                <>
+                  <div className="hidden md:block glass rounded-2xl overflow-hidden animate-slide-up">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/10 text-left text-xs font-medium text-white/40 uppercase tracking-wider">
+                          <th className="px-4 py-3 font-medium">Id</th>
+                          <th className="px-4 py-3 font-medium">Uchastka</th>
+                          <th className="px-4 py-3 font-medium">Stansiyalar soni</th>
+                          <th className="px-4 py-3 font-medium">Relelar soni</th>
+                          <th className="px-4 py-3 font-medium text-right">Amallar</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {uchastkalar.map((u, idx) => {
+                          const stationIds = stations.filter((s) => s.uchastka_id === u.id).map((s) => s.id);
+                          const relayCount = relays.filter((r) => stationIds.includes(r.stationId)).length;
+                          return (
+                            <tr key={u.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
+                              <td className="px-4 py-3 text-white/60">{idx + 1}</td>
+                              <td className="px-4 py-3 font-semibold text-white">{u.name}</td>
+                              <td className="px-4 py-3 text-white/60">{stationIds.length}</td>
+                              <td className="px-4 py-3 text-white/60">{relayCount}</td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button onClick={() => setEditingUchastka({ id: u.id, name: u.name })}
+                                    className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                                    Tahrirlash
+                                  </button>
+                                  <button onClick={() => setDeleteUchastkaId(u.id)}
+                                    className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
+                                    O'chirish
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                )}
-              </div>
+
+                  <div className="md:hidden space-y-3">
+                    {uchastkalar.map((u) => {
+                      const stationIds = stations.filter((s) => s.uchastka_id === u.id).map((s) => s.id);
+                      const relayCount = relays.filter((r) => stationIds.includes(r.stationId)).length;
+                      return (
+                        <div key={u.id} className="glass rounded-2xl p-4 flex items-center gap-4">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400/20 to-sky-500/20 text-cyan-400 font-bold">
+                            {u.name.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-white">{u.name}</p>
+                            <p className="text-xs text-white/40">{stationIds.length} ta stansiya &middot; {relayCount} ta rele</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => setEditingUchastka({ id: u.id, name: u.name })}
+                              className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                              Tahrirlash
+                            </button>
+                            <button onClick={() => setDeleteUchastkaId(u.id)}
+                              className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
+                              O'chirish
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -1015,12 +1090,15 @@ export default function RelayDashboard() {
                 <input value={newUchastka.name} onChange={(e) => setNewUchastka({ name: e.target.value })}
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
               </div>
+              {uchastkaFormError && (
+                <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{uchastkaFormError}</div>
+              )}
               <div className="mt-5 flex gap-3">
                 <button onClick={handleAddUchastka}
                   className="rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 px-6 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98]">
                   Uchastka qo'shish
                 </button>
-                <button onClick={() => setActiveNav('uchastkalar')}
+                <button onClick={() => { setUchastkaFormError(''); setActiveNav('uchastkalar'); }}
                   className="rounded-xl bg-white/10 px-6 py-3 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
                   Bekor qilish
                 </button>
@@ -1179,12 +1257,15 @@ export default function RelayDashboard() {
               </select>
             </div>
           </div>
+          {stationFormError && (
+            <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{stationFormError}</div>
+          )}
           <div className="mt-5 flex gap-3">
             <button onClick={handleUpdateStation}
               className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
               Saqlash
             </button>
-            <button onClick={() => setEditingStation(null)}
+            <button onClick={() => { setStationFormError(''); setEditingStation(null); }}
               className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
               Bekor qilish
             </button>
