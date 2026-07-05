@@ -578,6 +578,22 @@ export default function RelayDashboard() {
                 <h2 className="text-2xl font-black text-white">Dashboard</h2>
                 <p className="text-sm text-white/40 mt-1">Rele tizimining umumiy holati</p>
               </div>
+              {stats.expired > 0 && (
+                <div className="flex items-start gap-3 rounded-2xl bg-red-500/10 border border-red-500/30 p-4 sm:p-5 animate-fade-in">
+                  <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-red-500/20 text-lg animate-pulse-soft">⚠️</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-red-400">{stats.expired} ta rele muddati o'tgan!</p>
+                    <p className="text-xs text-white/50 mt-0.5 truncate">
+                      {stationRelays.filter((r) => r.status === 'red').slice(0, 3).map((r) => r.name).join(', ')}
+                      {stats.expired > 3 ? ` va yana ${stats.expired - 3} ta` : ''} — tekshiruvdan o'tkazish talab etiladi.
+                    </p>
+                    <button onClick={() => { setActiveNav('relays'); setFilterStatus('red'); }}
+                      className="mt-3 rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/30">
+                      Ko'rish
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
                 <StatCard label="Jami relelar" value={stats.total} gradient="bg-gradient-to-br from-white/[0.08] to-white/[0.02]" icon="⚡" delay={0} />
                 <StatCard label="Muddati o'tgan" value={stats.expired} gradient="bg-gradient-to-br from-red-500/20 to-red-500/5" icon="🔴" delay={100} />
@@ -589,7 +605,7 @@ export default function RelayDashboard() {
                 <div className="space-y-3">
                   {visibleStations.map((s) => {
                     const count = relays.filter((r) => r.stationId === s.id).length;
-                    const expired = relays.filter((r) => r.stationId === s.id && r.status === 'red').length;
+                    const expired = relays.filter((r) => r.stationId === s.id && getRelayStatusFromDate(r.nextCheck) === 'red').length;
                     return (
                       <div key={s.id} className="flex items-center gap-4 rounded-xl bg-white/5 px-4 py-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 text-xs font-bold">
