@@ -96,6 +96,24 @@ function StatCard({ label, value, gradient, icon, delay }) {
   );
 }
 
+function ThemeToggle({ theme, onToggle, className = '' }) {
+  return (
+    <button onClick={onToggle} type="button"
+      className={`flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white ${className}`}
+      title={theme === 'dark' ? "Yorug' rejim" : "Qorong'i rejim"}>
+      {theme === 'dark' ? (
+        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      ) : (
+        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 1020.354 15.354z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 export default function RelayDashboard() {
   const [stations, setStations] = useState([ADMIN_STATION]);
   const [relays, setRelays] = useState([]);
@@ -132,6 +150,9 @@ export default function RelayDashboard() {
   const [editingUchastka, setEditingUchastka] = useState(null);
   const [deleteUchastkaId, setDeleteUchastkaId] = useState(null);
   const [uchastkaFormError, setUchastkaFormError] = useState('');
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('rc_theme') || 'dark'; } catch { return 'dark'; }
+  });
   const [qrPreviewRelay, setQrPreviewRelay] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [publicUrl, setPublicUrl] = useState(() => {
@@ -181,6 +202,13 @@ export default function RelayDashboard() {
   useEffect(() => {
     try { localStorage.setItem('rc_active_nav', activeNav); } catch {}
   }, [activeNav]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('rc_theme', theme); } catch {}
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
   useEffect(() => {
     const adminOnlyNav = ['stations', 'settings', 'add-relay', 'add-station', 'uchastkalar', 'add-uchastka'];
@@ -448,6 +476,9 @@ export default function RelayDashboard() {
           <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-amber-500/10 blur-[120px] animate-float" />
           <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-[120px] animate-float" style={{ animationDelay: '-3s' }} />
         </div>
+        <div className="fixed top-4 right-4 z-10">
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        </div>
         <div className="flex min-h-screen items-center justify-center p-4">
           <div className="w-full max-w-5xl animate-fade-in">
             <div className="grid gap-8 lg:grid-cols-5">
@@ -551,7 +582,8 @@ export default function RelayDashboard() {
         <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/20">
           <span className="text-sm font-black text-slate-950">R</span>
         </div>
-        <span className="text-sm font-bold tracking-widest text-white">RELE CONTROL</span>
+        <span className="text-sm font-bold tracking-widest text-white flex-1">RELE CONTROL</span>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -623,6 +655,7 @@ export default function RelayDashboard() {
                 <p className="text-xs font-medium text-white truncate">{auth.name}</p>
                 <p className="text-[10px] text-white/30 truncate">{auth.id === 'admin' ? 'Administrator' : 'Stansiya foydalanuvchisi'}</p>
               </div>
+              <ThemeToggle theme={theme} onToggle={toggleTheme} className="h-8 w-8 flex-shrink-0" />
             </div>
 
             <button onClick={handleLogout}
@@ -659,7 +692,7 @@ export default function RelayDashboard() {
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-                <StatCard label="Jami relelar" value={stats.total} gradient="bg-gradient-to-br from-white/[0.08] to-white/[0.02]" icon="⚡" delay={0} />
+                <StatCard label="Jami relelar" value={stats.total} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0} />
                 <StatCard label="Muddati o'tgan" value={stats.expired} gradient="bg-gradient-to-br from-red-500/20 to-red-500/5" icon="🔴" delay={100} />
                 <StatCard label="Xavf ostida" value={stats.warning} gradient="bg-gradient-to-br from-yellow-500/20 to-yellow-500/5" icon="🟡" delay={200} />
                 <StatCard label="Soz holatda" value={stats.active} gradient="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5" icon="🟢" delay={300} />
