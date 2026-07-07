@@ -115,7 +115,10 @@ function ThemeToggle({ theme, onToggle, className = '' }) {
 }
 
 function MechanicSelect({ mexaniklar, value, onChange }) {
-  const selected = value ? value.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const knownNames = mexaniklar.map((m) => m.name);
+  const selected = value
+    ? value.split(',').map((s) => s.trim()).filter((s) => knownNames.includes(s))
+    : [];
   const toggle = (name) => {
     const next = selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name];
     onChange(next.join(', '));
@@ -124,20 +127,28 @@ function MechanicSelect({ mexaniklar, value, onChange }) {
     return <p className="text-xs text-white/30 rounded-xl border border-white/10 bg-white/5 px-4 py-3">Hali mexanik qo'shilmagan</p>;
   }
   return (
-    <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-      {mexaniklar.map((m) => {
-        const isSelected = selected.includes(m.name);
-        return (
-          <button key={m.id} type="button" onClick={() => toggle(m.name)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-              isSelected
-                ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40'
-                : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
-            }`}>
-            {m.name}
-          </button>
-        );
-      })}
+    <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+      <div className="flex flex-wrap gap-2">
+        {mexaniklar.map((m) => {
+          const isSelected = selected.includes(m.name);
+          return (
+            <button key={m.id} type="button" onClick={() => toggle(m.name)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                isSelected
+                  ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40'
+                  : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+              }`}>
+              {m.name}
+            </button>
+          );
+        })}
+      </div>
+      {value && (
+        <button type="button" onClick={() => onChange('')}
+          className="mt-2 text-[11px] font-medium text-white/30 transition hover:text-red-400">
+          Tozalash
+        </button>
+      )}
     </div>
   );
 }
@@ -595,7 +606,7 @@ export default function RelayDashboard() {
               <div className="flex justify-between"><span className="text-white/40">Stansiya</span><span className="text-white font-medium">{sName}</span></div>
               {publicRelay.stativ && <div className="flex justify-between"><span className="text-white/40">Stativ</span><span className="text-white font-medium">{publicRelay.stativ}</span></div>}
               <div className="flex justify-between"><span className="text-white/40">Tekshiruv</span><span className="text-white font-medium">{publicRelay.nextCheck}</span></div>
-              {publicRelay.note && <div className="flex justify-between"><span className="text-white/40">Izoh</span><span className="text-white/50 text-xs italic">{publicRelay.note}</span></div>}
+              {publicRelay.note && <div className="flex justify-between"><span className="text-white/40">Tekshirdi</span><span className="text-white/50 text-xs italic">{publicRelay.note}</span></div>}
             </div>
           </div>
         </div>
@@ -1258,7 +1269,7 @@ export default function RelayDashboard() {
                 </div>
               </div>
               <div className="mt-4 space-y-1.5">
-                <label className="text-xs font-medium text-white/60">Izoh (mexaniklar)</label>
+                <label className="text-xs font-medium text-white/60">Tekshirdi</label>
                 <MechanicSelect mexaniklar={mexaniklar} value={newRelay.note} onChange={(v) => setNewRelay({ ...newRelay, note: v })} />
               </div>
               <div className="mt-5 flex gap-3">
@@ -1678,7 +1689,7 @@ export default function RelayDashboard() {
             </div>
           </div>
           <div className="mt-4 space-y-1.5">
-            <label className="text-xs font-medium text-white/60">Izoh (mexaniklar)</label>
+            <label className="text-xs font-medium text-white/60">Tekshirdi</label>
             <MechanicSelect mexaniklar={mexaniklar} value={selectedRelay?.note || ''}
               onChange={(v) => setSelectedRelay({ ...selectedRelay, note: v })} />
           </div>
