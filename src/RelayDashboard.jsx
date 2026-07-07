@@ -25,18 +25,20 @@ function getRelayStatusFromDate(dateString) {
 
 const statusConfig = {
   red: { label: "Muddati o'tgan", color: 'red', lightBg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', dot: 'bg-red-400', bar: 'bg-red-500/20', barFill: 'bg-red-500' },
-  yellow: { label: 'Xavf (30 kun)', color: 'yellow', lightBg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400', dot: 'bg-yellow-400', bar: 'bg-yellow-500/20', barFill: 'bg-yellow-500' },
-  green: { label: 'Soz holatda', color: 'green', lightBg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400', bar: 'bg-emerald-500/20', barFill: 'bg-emerald-500' },
+  yellow: { label: 'Muddati yaqin', color: 'yellow', lightBg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400', dot: 'bg-yellow-400', bar: 'bg-yellow-500/20', barFill: 'bg-yellow-500' },
+  green: { label: 'Muddati bor', color: 'green', lightBg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400', bar: 'bg-emerald-500/20', barFill: 'bg-emerald-500' },
 };
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
   { id: 'relays', label: 'Relelar', icon: 'M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z',
-    children: [{ id: 'add-relay', label: '+ Rele' }] },
+    children: [{ id: 'add-relay', label: '+ Rele' }, { id: 'monthly-plan', label: 'Oylik reja' }] },
   { id: 'stations', label: 'Stansiyalar', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', adminOnly: true,
     children: [{ id: 'add-station', label: '+ Stansiya' }] },
   { id: 'uchastkalar', label: 'Uchastkalar', icon: 'M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7', adminOnly: true,
     children: [{ id: 'add-uchastka', label: '+ Uchastka' }] },
+  { id: 'mexaniklar', label: 'Mexaniklar', icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z', adminOnly: true,
+    children: [{ id: 'add-mexanik', label: '+ Mexanik' }] },
   { id: 'settings', label: 'Sozlamalar', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z', adminOnly: true },
 ];
 
@@ -112,6 +114,34 @@ function ThemeToggle({ theme, onToggle, className = '' }) {
   );
 }
 
+function MechanicSelect({ mexaniklar, value, onChange }) {
+  const selected = value ? value.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const toggle = (name) => {
+    const next = selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name];
+    onChange(next.join(', '));
+  };
+  if (mexaniklar.length === 0) {
+    return <p className="text-xs text-white/30 rounded-xl border border-white/10 bg-white/5 px-4 py-3">Hali mexanik qo'shilmagan</p>;
+  }
+  return (
+    <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+      {mexaniklar.map((m) => {
+        const isSelected = selected.includes(m.name);
+        return (
+          <button key={m.id} type="button" onClick={() => toggle(m.name)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              isSelected
+                ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40'
+                : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+            }`}>
+            {m.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function RelayDashboard() {
   const [stations, setStations] = useState([]);
   const [relays, setRelays] = useState([]);
@@ -150,10 +180,16 @@ export default function RelayDashboard() {
   const [editingUchastka, setEditingUchastka] = useState(null);
   const [deleteUchastkaId, setDeleteUchastkaId] = useState(null);
   const [uchastkaFormError, setUchastkaFormError] = useState('');
+  const [mexaniklar, setMexaniklar] = useState([]);
+  const [newMexanik, setNewMexanik] = useState({ name: '' });
+  const [editingMexanik, setEditingMexanik] = useState(null);
+  const [deleteMexanikId, setDeleteMexanikId] = useState(null);
+  const [mexanikFormError, setMexanikFormError] = useState('');
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('rc_theme') || 'dark'; } catch { return 'dark'; }
   });
   const [qrPreviewRelay, setQrPreviewRelay] = useState(null);
+  const [viewStation, setViewStation] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [publicUrl, setPublicUrl] = useState(() => {
     try { return localStorage.getItem('rc_public_url') || ''; } catch { return ''; }
@@ -187,7 +223,8 @@ export default function RelayDashboard() {
       supabase.from('stations').select('id,name,username,uchastka_id'),
       supabase.from('relays').select('*'),
       supabase.from('uchastkalar').select('*'),
-    ]).then(([{ data: stationsData }, { data: relaysData }, { data: uchastkalarData }]) => {
+      supabase.from('mexaniklar').select('*'),
+    ]).then(([{ data: stationsData }, { data: relaysData }, { data: uchastkalarData }, { data: mexaniklarData }]) => {
       if (stationsData) {
         setStations(stationsData);
         const firstStation = stationsData.find((s) => s.id !== 'admin');
@@ -195,6 +232,7 @@ export default function RelayDashboard() {
       }
       if (relaysData) setRelays(relaysData.map(toRelay));
       if (uchastkalarData) setUchastkalar(uchastkalarData);
+      if (mexaniklarData) setMexaniklar(mexaniklarData);
       setLoading(false);
     });
   }, []);
@@ -215,7 +253,7 @@ export default function RelayDashboard() {
   }, [searchQuery, filterStatus, adminFilterStation, relayPageSize]);
 
   useEffect(() => {
-    const adminOnlyNav = ['stations', 'settings', 'add-relay', 'add-station', 'uchastkalar', 'add-uchastka'];
+    const adminOnlyNav = ['stations', 'settings', 'add-relay', 'add-station', 'uchastkalar', 'add-uchastka', 'mexaniklar', 'add-mexanik', 'monthly-plan'];
     if (auth && auth.id !== 'admin' && adminOnlyNav.includes(activeNav)) {
       setActiveNav('dashboard');
     }
@@ -251,9 +289,36 @@ export default function RelayDashboard() {
     ? stations.filter((s) => s.id !== 'admin')
     : stations.filter((s) => s.id === auth?.id);
 
+  const monthlyPlanByStation = stations
+    .filter((s) => s.id !== 'admin')
+    .map((s) => ({
+      station: s,
+      relays: relays
+        .filter((r) => r.stationId === s.id)
+        .map((r) => ({ ...r, status: getRelayStatusFromDate(r.nextCheck) }))
+        .filter((r) => r.status === 'yellow')
+        .sort((a, b) => new Date(a.nextCheck) - new Date(b.nextCheck)),
+    }))
+    .filter((g) => g.relays.length > 0);
 
   const getStationName = (id) => stations.find((s) => s.id === id)?.name || id;
   const getUchastkaName = (id) => uchastkalar.find((u) => u.id === id)?.name || '—';
+
+  const viewStationData = viewStation ? stations.find((s) => s.id === viewStation) : null;
+  const viewStationRelays = relays
+    .filter((r) => r.stationId === viewStation)
+    .map((r) => ({ ...r, status: getRelayStatusFromDate(r.nextCheck) }))
+    .sort((a, b) => {
+      if (!a.nextCheck) return 1;
+      if (!b.nextCheck) return -1;
+      return new Date(a.nextCheck) - new Date(b.nextCheck);
+    });
+  const viewStationStats = {
+    total: viewStationRelays.length,
+    expired: viewStationRelays.filter((r) => r.status === 'red').length,
+    warning: viewStationRelays.filter((r) => r.status === 'yellow').length,
+    active: viewStationRelays.filter((r) => r.status === 'green').length,
+  };
 
   const printQRCode = async (relay) => {
     const canvas = document.createElement('canvas');
@@ -297,6 +362,7 @@ export default function RelayDashboard() {
       localStorage.removeItem('rc_active_nav');
     } catch {}
     setSelectedRelay(null);
+    setViewStation(null);
     setLoginPassword('');
     setLoginUsername('');
     setLoginError('');
@@ -414,6 +480,37 @@ export default function RelayDashboard() {
     setDeleteUchastkaId(null);
   };
 
+  const handleAddMexanik = async () => {
+    setMexanikFormError('');
+    if (!newMexanik.name.trim()) return;
+    const newId = newMexanik.name.trim().toLowerCase().replace(/\s+/g, '-');
+    if (mexaniklar.some((m) => m.id === newId)) {
+      setMexanikFormError(`"${newMexanik.name}" nomli mexanik allaqachon mavjud.`);
+      return;
+    }
+    const row = { id: newId, name: newMexanik.name };
+    const { error } = await supabase.from('mexaniklar').insert(row);
+    if (error) { setMexanikFormError(error.message); return; }
+    setMexaniklar([...mexaniklar, row]);
+    setNewMexanik({ name: '' });
+  };
+
+  const handleUpdateMexanik = async () => {
+    if (!editingMexanik) return;
+    const row = { id: editingMexanik.id, name: editingMexanik.name };
+    const { error } = await supabase.from('mexaniklar').update(row).eq('id', row.id);
+    if (error) return;
+    setMexaniklar(mexaniklar.map((m) => m.id === row.id ? row : m));
+    setEditingMexanik(null);
+  };
+
+  const handleDeleteMexanik = async () => {
+    if (!deleteMexanikId) return;
+    await supabase.from('mexaniklar').delete().eq('id', deleteMexanikId);
+    setMexaniklar(mexaniklar.filter((m) => m.id !== deleteMexanikId));
+    setDeleteMexanikId(null);
+  };
+
   const exportToPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(16);
@@ -425,6 +522,28 @@ export default function RelayDashboard() {
       y += 8;
     });
     doc.save('rele-hisobot.pdf');
+  };
+
+  const exportMonthlyPlanPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("Oylik tekshiruv rejasi (muddati yaqin relelar)", 14, 16);
+    doc.setFontSize(10);
+    let y = 30;
+    monthlyPlanByStation.forEach((group) => {
+      if (y > 270) { doc.addPage(); y = 20; }
+      doc.setFont(undefined, 'bold');
+      doc.text(`${group.station.name} (${group.relays.length} ta)`, 14, y);
+      y += 7;
+      doc.setFont(undefined, 'normal');
+      group.relays.forEach((r, i) => {
+        if (y > 280) { doc.addPage(); y = 20; }
+        doc.text(`  ${i + 1}. ${r.name} (${r.num}) — ${r.nextCheck}`, 14, y);
+        y += 7;
+      });
+      y += 4;
+    });
+    doc.save('oylik-reja.pdf');
   };
 
   const filteredNav = navItems.filter((item) => (item.adminOnly ? auth?.id === 'admin' : true));
@@ -626,7 +745,7 @@ export default function RelayDashboard() {
               const isExpanded = item.children && (activeNav === item.id || item.children.some((c) => c.id === activeNav));
               return (
                 <div key={item.id}>
-                  <button onClick={() => { setActiveNav(item.id); setSidebarOpen(false); }}
+                  <button onClick={() => { setActiveNav(item.id); setSidebarOpen(false); setViewStation(null); }}
                     className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
                       activeNav === item.id
                         ? 'bg-amber-500/15 text-amber-400 shadow-sm'
@@ -645,7 +764,7 @@ export default function RelayDashboard() {
                   {isExpanded && item.children && auth?.id === 'admin' && (
                     <div className="ml-3 mt-1 space-y-0.5 border-l border-white/5 pl-2">
                       {item.children.map((child) => (
-                        <button key={child.id} onClick={() => { setActiveNav(child.id); setSidebarOpen(false); }}
+                        <button key={child.id} onClick={() => { setActiveNav(child.id); setSidebarOpen(false); setViewStation(null); }}
                           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
                             activeNav === child.id
                               ? 'bg-amber-500/10 text-amber-400'
@@ -684,6 +803,135 @@ export default function RelayDashboard() {
         </aside>
 
         <main className="lg:ml-64 flex-1 pt-14 px-4 pb-4 lg:pt-6 lg:px-6 lg:pb-6 space-y-6">
+          {viewStation ? (
+            <div className="space-y-6 animate-fade-in">
+              <div className="flex items-center gap-3">
+                <button onClick={() => setViewStation(null)}
+                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <div>
+                  <h2 className="text-2xl font-black text-white">{viewStationData?.name}</h2>
+                  <p className="text-sm text-white/40 mt-1">Stansiya bo'yicha statistika va relelar</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+                <StatCard label="Jami relelar" value={viewStationStats.total} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0} />
+                <StatCard label="Muddati o'tgan" value={viewStationStats.expired} gradient="bg-gradient-to-br from-red-500/20 to-red-500/5" icon="🔴" delay={100} />
+                <StatCard label="Muddati yaqin" value={viewStationStats.warning} gradient="bg-gradient-to-br from-yellow-500/20 to-yellow-500/5" icon="🟡" delay={200} />
+                <StatCard label="Muddati bor" value={viewStationStats.active} gradient="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5" icon="🟢" delay={300} />
+              </div>
+
+              {viewStationRelays.length === 0 ? (
+                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
+                  <div className="text-5xl mb-4 opacity-30">🔍</div>
+                  <p className="text-lg font-semibold text-white/60">Bu stansiyada rele yo'q</p>
+                </div>
+              ) : (
+                <div className="hidden md:block glass rounded-2xl overflow-hidden animate-slide-up">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 text-left text-xs font-medium text-white/40 uppercase tracking-wider">
+                        <th className="px-4 py-3 font-medium">Status</th>
+                        <th className="px-4 py-3 font-medium">Nomi</th>
+                        <th className="px-4 py-3 font-medium">Stativ</th>
+                        <th className="px-4 py-3 font-medium">Keyingi tekshiruv</th>
+                        {auth?.id === 'admin' && <th className="px-4 py-3 font-medium text-right">Amallar</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewStationRelays.map((relay) => {
+                        const sc = statusConfig[relay.status];
+                        return (
+                          <tr key={relay.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${sc.lightBg} ${sc.text} ${sc.border} border`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${sc.dot} ${relay.status === 'red' ? 'animate-pulse-soft' : ''}`} />
+                                {sc.label}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="font-semibold text-white" title={relay.note || undefined}>{relay.name}</div>
+                              <div className="text-xs font-mono text-white/30">№ {relay.num}</div>
+                            </td>
+                            <td className="px-4 py-3 text-white/60">{relay.stativ || '—'}</td>
+                            <td className="px-4 py-3 text-white/60">{relay.nextCheck}</td>
+                            {auth?.id === 'admin' && (
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button onClick={() => setSelectedRelay({ ...relay })}
+                                    className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                                    Tahrirlash
+                                  </button>
+                                  <button onClick={() => printQRCode(relay)}
+                                    className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
+                                    QR
+                                  </button>
+                                  <button onClick={() => { if (confirm(`${relay.name} — ${relay.num} ni o'chirasizmi?`)) handleDeleteRelay(relay.id); }}
+                                    className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
+                                    O'chirish
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="md:hidden grid grid-cols-1 gap-4">
+                {viewStationRelays.map((relay, idx) => {
+                  const sc = statusConfig[relay.status];
+                  return (
+                    <div key={relay.id}
+                      className="group relative overflow-hidden rounded-2xl glass hover:bg-white/[0.08] transition-all duration-500 animate-slide-up"
+                      style={{ animationDelay: `${idx * 80}ms` }}>
+                      <div className={`absolute top-0 left-0 h-1 w-full ${sc.bar}`}>
+                        <div className={`h-full ${sc.barFill}`} style={{ width: relay.status === 'green' ? '25%' : relay.status === 'yellow' ? '60%' : '100%' }} />
+                      </div>
+                      <div className="p-5">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className={`flex h-2.5 w-2.5 rounded-full ${sc.dot} ${relay.status === 'red' ? 'animate-pulse-soft' : ''}`} />
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${sc.lightBg} ${sc.text} ${sc.border} border`}>
+                            {sc.label}
+                          </span>
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-1">{relay.name}</h3>
+                        <p className="text-xs font-mono text-white/30 mb-3">№ {relay.num}</p>
+                        <div className="space-y-1.5 text-sm text-white/50">
+                          {relay.stativ && <div>Stativ: {relay.stativ}</div>}
+                          <div>{relay.nextCheck}</div>
+                        </div>
+                        {auth?.id === 'admin' && (
+                          <div className="mt-4 flex gap-2 pt-4 border-t border-white/5">
+                            <button onClick={() => setSelectedRelay({ ...relay })}
+                              className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                              Tahrirlash
+                            </button>
+                            <button onClick={() => printQRCode(relay)}
+                              className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
+                              QR
+                            </button>
+                            <button onClick={() => { if (confirm(`${relay.name} — ${relay.num} ni o'chirasizmi?`)) handleDeleteRelay(relay.id); }}
+                              className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
+                              O'chirish
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+          <>
           {activeNav === 'dashboard' && (
             <div className="space-y-6 animate-fade-in">
               <div>
@@ -709,8 +957,8 @@ export default function RelayDashboard() {
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
                 <StatCard label="Jami relelar" value={stats.total} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0} />
                 <StatCard label="Muddati o'tgan" value={stats.expired} gradient="bg-gradient-to-br from-red-500/20 to-red-500/5" icon="🔴" delay={100} />
-                <StatCard label="Xavf ostida" value={stats.warning} gradient="bg-gradient-to-br from-yellow-500/20 to-yellow-500/5" icon="🟡" delay={200} />
-                <StatCard label="Soz holatda" value={stats.active} gradient="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5" icon="🟢" delay={300} />
+                <StatCard label="Muddati yaqin" value={stats.warning} gradient="bg-gradient-to-br from-yellow-500/20 to-yellow-500/5" icon="🟡" delay={200} />
+                <StatCard label="Muddati bor" value={stats.active} gradient="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5" icon="🟢" delay={300} />
               </div>
               <div className="glass rounded-2xl p-5">
                 <h3 className="text-sm font-bold text-white/80 mb-4">Stansiyalar bo'yicha relelar</h3>
@@ -719,7 +967,8 @@ export default function RelayDashboard() {
                     const count = relays.filter((r) => r.stationId === s.id).length;
                     const expired = relays.filter((r) => r.stationId === s.id && getRelayStatusFromDate(r.nextCheck) === 'red').length;
                     return (
-                      <div key={s.id} className="flex items-center gap-4 rounded-xl bg-white/5 px-4 py-3">
+                      <button key={s.id} type="button" onClick={() => setViewStation(s.id)}
+                        className="flex w-full items-center gap-4 rounded-xl bg-white/5 px-4 py-3 text-left transition hover:bg-white/10">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 text-xs font-bold">
                           {s.name.charAt(0)}
                         </div>
@@ -733,7 +982,7 @@ export default function RelayDashboard() {
                             {expired > 0 ? `${expired} muddati o'tgan` : 'Barchasi soz'}
                           </p>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -803,8 +1052,8 @@ export default function RelayDashboard() {
                     className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50">
                     <option value="all" className="bg-neutral-900 text-white">Barcha status</option>
                     <option value="red" className="bg-neutral-900 text-white">Muddati o'tgan</option>
-                    <option value="yellow" className="bg-neutral-900 text-white">Xavf</option>
-                    <option value="green" className="bg-neutral-900 text-white">Soz</option>
+                    <option value="yellow" className="bg-neutral-900 text-white">Muddati yaqin</option>
+                    <option value="green" className="bg-neutral-900 text-white">Muddati bor</option>
                   </select>
                   {auth?.id === 'admin' && (
                     <select value={adminFilterStation} onChange={(e) => setAdminFilterStation(e.target.value)}
@@ -1009,9 +1258,8 @@ export default function RelayDashboard() {
                 </div>
               </div>
               <div className="mt-4 space-y-1.5">
-                <label className="text-xs font-medium text-white/60">Izoh</label>
-                <textarea value={newRelay.note} onChange={(e) => setNewRelay({ ...newRelay, note: e.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 min-h-[80px]" />
+                <label className="text-xs font-medium text-white/60">Izoh (mexaniklar)</label>
+                <MechanicSelect mexaniklar={mexaniklar} value={newRelay.note} onChange={(v) => setNewRelay({ ...newRelay, note: v })} />
               </div>
               <div className="mt-5 flex gap-3">
                 <button onClick={handleAddRelay}
@@ -1023,6 +1271,53 @@ export default function RelayDashboard() {
                   Bekor qilish
                 </button>
               </div>
+            </div>
+          )}
+
+          {activeNav === 'monthly-plan' && auth?.id === 'admin' && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h2 className="text-2xl font-black text-white">Oylik reja</h2>
+                  <p className="text-sm text-white/40 mt-1">Muddati 30 kun ichida yetadigan relelar, stansiyalar bo'yicha</p>
+                </div>
+                {monthlyPlanByStation.length > 0 && (
+                  <button onClick={exportMonthlyPlanPDF}
+                    className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20">
+                    PDF Eksport
+                  </button>
+                )}
+              </div>
+
+              {monthlyPlanByStation.length === 0 ? (
+                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
+                  <div className="text-5xl mb-4 opacity-30">✅</div>
+                  <p className="text-lg font-semibold text-white/60">Bu oy uchun tekshiruv talab qiladigan rele yo'q</p>
+                </div>
+              ) : (
+                monthlyPlanByStation.map((group) => (
+                  <div key={group.station.id} className="glass rounded-2xl p-5 animate-slide-up">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-bold text-white/80">{group.station.name}</h3>
+                      <span className="rounded-md bg-yellow-500/10 border border-yellow-500/30 px-2 py-0.5 text-xs font-bold text-yellow-400">
+                        {group.relays.length} ta
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {group.relays.map((relay) => (
+                        <div key={relay.id} className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2.5">
+                          <span className="flex h-2 w-2 flex-shrink-0 rounded-full bg-yellow-400" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-white truncate">{relay.name}</p>
+                            <p className="text-[10px] font-mono text-white/30">№ {relay.num}{relay.stativ ? ` · Stativ: ${relay.stativ}` : ''}</p>
+                          </div>
+                          <p className="text-xs text-white/40 flex-shrink-0">{relay.nextCheck}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
@@ -1181,6 +1476,103 @@ export default function RelayDashboard() {
             </div>
           )}
 
+          {activeNav === 'mexaniklar' && auth?.id === 'admin' && (
+            <div className="space-y-4 animate-fade-in">
+              <div>
+                <h2 className="text-2xl font-black text-white">Mexaniklar</h2>
+                <p className="text-sm text-white/40 mt-1">Relelarga izoh sifatida biriktiriladigan mexaniklar ro'yxati</p>
+              </div>
+
+              {mexaniklar.length === 0 ? (
+                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
+                  <p className="text-sm text-white/40">Hali mexanik qo'shilmagan</p>
+                </div>
+              ) : (
+                <>
+                  <div className="hidden md:block glass rounded-2xl overflow-hidden animate-slide-up">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/10 text-left text-xs font-medium text-white/40 uppercase tracking-wider">
+                          <th className="px-4 py-3 font-medium">Id</th>
+                          <th className="px-4 py-3 font-medium">Ism</th>
+                          <th className="px-4 py-3 font-medium text-right">Amallar</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mexaniklar.map((m, idx) => (
+                          <tr key={m.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
+                            <td className="px-4 py-3 text-white/60">{idx + 1}</td>
+                            <td className="px-4 py-3 font-semibold text-white">{m.name}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-2">
+                                <button onClick={() => setEditingMexanik({ id: m.id, name: m.name })}
+                                  className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                                  Tahrirlash
+                                </button>
+                                <button onClick={() => setDeleteMexanikId(m.id)}
+                                  className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
+                                  O'chirish
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="md:hidden space-y-3">
+                    {mexaniklar.map((m) => (
+                      <div key={m.id} className="glass rounded-2xl p-4 flex items-center gap-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400/20 to-sky-500/20 text-cyan-400 font-bold">
+                          {m.name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-white">{m.name}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setEditingMexanik({ id: m.id, name: m.name })}
+                            className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                            Tahrirlash
+                          </button>
+                          <button onClick={() => setDeleteMexanikId(m.id)}
+                            className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
+                            O'chirish
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {activeNav === 'add-mexanik' && auth?.id === 'admin' && (
+            <div className="glass rounded-2xl p-6 animate-slide-up max-w-md">
+              <h2 className="text-lg font-bold text-white">Yangi mexanik qo'shish</h2>
+              <p className="text-sm text-white/40 mb-5">Relelar izohida tanlash uchun mexanik qo'shing</p>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-white/60">Mexanik ismi</label>
+                <input value={newMexanik.name} onChange={(e) => setNewMexanik({ name: e.target.value })}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
+              </div>
+              {mexanikFormError && (
+                <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{mexanikFormError}</div>
+              )}
+              <div className="mt-5 flex gap-3">
+                <button onClick={handleAddMexanik}
+                  className="rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 px-6 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98]">
+                  Mexanik qo'shish
+                </button>
+                <button onClick={() => { setMexanikFormError(''); setActiveNav('mexaniklar'); }}
+                  className="rounded-xl bg-white/10 px-6 py-3 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
+                  Bekor qilish
+                </button>
+              </div>
+            </div>
+          )}
+
           {activeNav === 'settings' && auth?.id === 'admin' && (
             <div className="space-y-4 animate-fade-in max-w-2xl">
               <div>
@@ -1240,6 +1632,8 @@ export default function RelayDashboard() {
               </div>
             </div>
           )}
+          </>
+          )}
         </main>
       </div>
 
@@ -1284,10 +1678,9 @@ export default function RelayDashboard() {
             </div>
           </div>
           <div className="mt-4 space-y-1.5">
-            <label className="text-xs font-medium text-white/60">Izoh</label>
-            <textarea value={selectedRelay?.note || ''}
-              onChange={(e) => setSelectedRelay({ ...selectedRelay, note: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 min-h-[80px]" />
+            <label className="text-xs font-medium text-white/60">Izoh (mexaniklar)</label>
+            <MechanicSelect mexaniklar={mexaniklar} value={selectedRelay?.note || ''}
+              onChange={(v) => setSelectedRelay({ ...selectedRelay, note: v })} />
           </div>
           <div className="mt-5 flex gap-3">
             <button onClick={handleSaveEdit}
@@ -1413,6 +1806,35 @@ export default function RelayDashboard() {
         message={`Haqiqatan ham ushbu uchastkani o'chirmoqchimisiz? Unga bog'langan stansiyalar "tanlanmagan" holatiga o'tadi.`}
         onConfirm={handleDeleteUchastka}
         onCancel={() => setDeleteUchastkaId(null)}
+      />
+
+      <Modal isOpen={!!editingMexanik} onClose={() => setEditingMexanik(null)}>
+        <div className="glass rounded-2xl p-6">
+          <h2 className="text-lg font-bold text-white mb-1">Mexanikni tahrirlash</h2>
+          <div className="space-y-1.5 mt-4">
+            <label className="text-xs font-medium text-white/60">Mexanik ismi</label>
+            <input value={editingMexanik?.name || ''} onChange={(e) => setEditingMexanik({ ...editingMexanik, name: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
+          </div>
+          <div className="mt-5 flex gap-3">
+            <button onClick={handleUpdateMexanik}
+              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
+              Saqlash
+            </button>
+            <button onClick={() => setEditingMexanik(null)}
+              className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+              Bekor qilish
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        isOpen={!!deleteMexanikId}
+        title="Mexanikni o'chirish"
+        message="Haqiqatan ham ushbu mexanikni o'chirmoqchimisiz?"
+        onConfirm={handleDeleteMexanik}
+        onCancel={() => setDeleteMexanikId(null)}
       />
     </div>
   );
