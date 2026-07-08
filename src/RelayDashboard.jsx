@@ -351,6 +351,14 @@ export default function RelayDashboard() {
     warning: viewStationRelays.filter((r) => r.status === 'yellow').length,
     active: viewStationRelays.filter((r) => r.status === 'green').length,
   };
+  const viewStationNameCounts = Object.values(
+    viewStationRelays.reduce((acc, r) => {
+      const key = r.name || '—';
+      acc[key] = acc[key] || { name: key, count: 0 };
+      acc[key].count += 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
   const printQRCode = async (relay) => {
     const canvas = document.createElement('canvas');
@@ -863,6 +871,20 @@ export default function RelayDashboard() {
                 <StatCard label={t('stat.warning')} value={viewStationStats.warning} gradient="bg-gradient-to-br from-yellow-500/20 to-yellow-500/5" icon="🟡" delay={200} />
                 <StatCard label={t('stat.active')} value={viewStationStats.active} gradient="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5" icon="🟢" delay={300} />
               </div>
+
+              {viewStationNameCounts.length > 0 && (
+                <div className="glass rounded-2xl p-5">
+                  <h3 className="text-sm font-bold text-white/80 mb-4">{t('stationView.byName')}</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {viewStationNameCounts.map((item) => (
+                      <div key={item.name} className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2">
+                        <span className="text-sm text-white/70 truncate">{item.name}</span>
+                        <span className="flex-shrink-0 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-xs font-bold text-amber-400">{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {viewStationRelays.length === 0 ? (
                 <div className="glass rounded-2xl p-12 text-center animate-fade-in">

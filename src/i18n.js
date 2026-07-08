@@ -77,6 +77,7 @@ export const translations = {
 
     'stationView.subtitle': "Stansiya bo'yicha statistika va relelar",
     'stationView.empty': "Bu stansiyada rele yo'q",
+    'stationView.byName': "Rele nomi bo'yicha statistika",
 
     'table.status': "Status",
     'table.name': "Nomi",
@@ -258,6 +259,7 @@ export const translations = {
 
     'stationView.subtitle': "Статистика и реле по станции",
     'stationView.empty': "На этой станции нет реле",
+    'stationView.byName': "Статистика по названию реле",
 
     'table.status': "Статус",
     'table.name': "Название",
@@ -439,6 +441,7 @@ export const translations = {
 
     'stationView.subtitle': "Station stats and relays",
     'stationView.empty': "No relays at this station",
+    'stationView.byName': "Statistics by relay name",
 
     'table.status': "Status",
     'table.name': "Name",
