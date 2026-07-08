@@ -13,6 +13,15 @@ function qrUrl(relay) {
   return `${getPublicUrl()}/relay/${relay.id}`;
 }
 
+async function registerPdfFont(doc) {
+  const { ROBOTO_REGULAR_BASE64, ROBOTO_BOLD_BASE64 } = await import('./fonts/robotoFont.js');
+  doc.addFileToVFS('Roboto-Regular.ttf', ROBOTO_REGULAR_BASE64);
+  doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
+  doc.addFileToVFS('Roboto-Bold.ttf', ROBOTO_BOLD_BASE64);
+  doc.addFont('Roboto-Bold.ttf', 'Roboto', 'bold');
+  doc.setFont('Roboto', 'normal');
+}
+
 function getRelayStatusFromDate(dateString) {
   if (!dateString) return 'green';
   const now = new Date();
@@ -580,8 +589,9 @@ export default function RelayDashboard() {
     setDeleteMexanikId(null);
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     const doc = new jsPDF();
+    await registerPdfFont(doc);
     doc.setFontSize(16);
     doc.text(`Rele-Control — ${auth?.id === 'admin' ? 'ADMIN hisobot' : auth?.name || 'Hisobot'}`, 14, 16);
     doc.setFontSize(10);
@@ -593,18 +603,19 @@ export default function RelayDashboard() {
     doc.save('rele-hisobot.pdf');
   };
 
-  const exportMonthlyPlanPDF = () => {
+  const exportMonthlyPlanPDF = async () => {
     const doc = new jsPDF();
+    await registerPdfFont(doc);
     doc.setFontSize(16);
     doc.text("Oylik tekshiruv rejasi (muddati yaqin relelar)", 14, 16);
     doc.setFontSize(10);
     let y = 30;
     monthlyPlanByStation.forEach((group) => {
       if (y > 270) { doc.addPage(); y = 20; }
-      doc.setFont(undefined, 'bold');
+      doc.setFont('Roboto', 'bold');
       doc.text(`${group.station.name} (${group.relays.length} ta)`, 14, y);
       y += 7;
-      doc.setFont(undefined, 'normal');
+      doc.setFont('Roboto', 'normal');
       group.relays.forEach((r, i) => {
         if (y > 280) { doc.addPage(); y = 20; }
         doc.text(`  ${i + 1}. ${r.name} (${r.num}) — ${r.nextCheck}`, 14, y);
@@ -615,20 +626,59 @@ export default function RelayDashboard() {
     doc.save('oylik-reja.pdf');
   };
 
-  const exportMexanikMonthPDF = () => {
+  const exportMexanikMonthPDF = async () => {
     if (!viewMexanikData) return;
     const monthLabel = formatMonth(thisMonthKey, 'uz');
     const doc = new jsPDF();
+    await registerPdfFont(doc);
+    let y = 16;
     doc.setFontSize(16);
-    doc.text(`${viewMexanikData.name} — ${monthLabel}`, 14, 16);
+    doc.text(viewMexanikData.name, 14, y);
+    y += 10;
     doc.setFontSize(10);
-    doc.text(`Bu oyda tekshirilgan relelar: ${viewMexanikThisMonthRelays.length} ta`, 14, 24);
-    let y = 36;
-    viewMexanikThisMonthRelays.forEach((r, i) => {
-      if (y > 280) { doc.addPage(); y = 20; }
-      doc.text(`${i + 1}. ${r.name} (${r.num}) — ${getStationName(r.stationId)} — ${r.lastCheck}`, 14, y);
+    doc.text(`Jami tekshirilgan relelar: ${viewMexanikRelays.length} ta`, 14, y);
+    y += 10;
+
+    doc.setFont('Roboto', 'bold');
+    doc.text(`${monthLabel} oyida tekshirilgan: ${viewMexanikThisMonthRelays.length} ta`, 14, y);
+    y += 8;
+    doc.setFont('Roboto', 'normal');
+    if (viewMexanikThisMonthRelays.length === 0) {
+      doc.text('Bu oyda tekshirilgan rele yo\'q', 14, y);
       y += 8;
+    } else {
+      viewMexanikThisMonthRelays.forEach((r, i) => {
+        if (y > 280) { doc.addPage(); y = 20; }
+        doc.text(`  ${i + 1}. ${r.name} (${r.num}) — ${getStationName(r.stationId)} — ${r.lastCheck}`, 14, y);
+        y += 8;
+      });
+    }
+    y += 4;
+
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFont('Roboto', 'bold');
+    doc.text('Rele nomi bo\'yicha statistika', 14, y);
+    y += 8;
+    doc.setFont('Roboto', 'normal');
+    viewMexanikNameCounts.forEach((item) => {
+      if (y > 280) { doc.addPage(); y = 20; }
+      doc.text(`  ${item.name} — ${item.count} ta`, 14, y);
+      y += 7;
     });
+    y += 4;
+
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFont('Roboto', 'bold');
+    doc.text('Oylar bo\'yicha statistika', 14, y);
+    y += 8;
+    doc.setFont('Roboto', 'normal');
+    viewMexanikMonthCounts.forEach((item) => {
+      if (y > 280) { doc.addPage(); y = 20; }
+      const label = item.month ? formatMonth(item.month, 'uz') : 'Sana kiritilmagan';
+      doc.text(`  ${label} — ${item.count} ta`, 14, y);
+      y += 7;
+    });
+
     doc.save(`mexanik-${viewMexanikData.id}-${thisMonthKey}.pdf`);
   };
 
@@ -1055,7 +1105,7 @@ export default function RelayDashboard() {
                     <p className="text-sm text-white/40 mt-1">{t('mexanikView.subtitle')}</p>
                   </div>
                 </div>
-                {viewMexanikThisMonthRelays.length > 0 && (
+                {viewMexanikRelays.length > 0 && (
                   <button onClick={exportMexanikMonthPDF}
                     className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20">
                     {t('common.pdfExport')}
