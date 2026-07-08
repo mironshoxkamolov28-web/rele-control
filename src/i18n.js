@@ -147,6 +147,7 @@ export const translations = {
     'addMexanik.title': "Yangi mexanik qo'shish",
     'addMexanik.subtitle': "Relelar izohida tanlash uchun mexanik qo'shing",
     'field.mechanicName': "Mexanik ismi",
+    'addMexanik.loginHint': "Ixtiyoriy — agar mexanik shaxsan tizimga kirib o'z statistikasini ko'rishi kerak bo'lsa to'ldiring",
     'addMexanik.submit': "Mexanik qo'shish",
 
     'settings.subtitle': "QR kod va tizim sozlamalari",
@@ -338,6 +339,7 @@ export const translations = {
     'addMexanik.title': "Добавить нового механика",
     'addMexanik.subtitle': "Добавьте механика для выбора в примечании реле",
     'field.mechanicName': "Имя механика",
+    'addMexanik.loginHint': "Необязательно — заполните, если механик должен сам входить в систему и видеть свою статистику",
     'addMexanik.submit': "Добавить механика",
 
     'settings.subtitle': "Настройки QR-кода и системы",
@@ -529,6 +531,7 @@ export const translations = {
     'addMexanik.title': "Add new mechanic",
     'addMexanik.subtitle': "Add a mechanic to be selectable in relay notes",
     'field.mechanicName': "Mechanic name",
+    'addMexanik.loginHint': "Optional — fill in if the mechanic should log in themselves to see their own stats",
     'addMexanik.submit': "Add mechanic",
 
     'settings.subtitle': "QR code and system settings",

@@ -173,6 +173,66 @@ function MechanicSelect({ mexaniklar, value, onChange, t }) {
   );
 }
 
+function MexanikStatsPanel({
+  t, lang, relays, thisMonthRelays, thisMonthKey, monthCounts,
+  selectedMonth, onSelectMonth, monthRelays, getStationName,
+}) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 lg:gap-4">
+        <StatCard label={t('mexanikView.totalChecked')} value={relays.length} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0} />
+        <StatCard label={`${t('mexanikView.thisMonth')} — ${formatMonth(thisMonthKey, lang)}`} value={thisMonthRelays.length} gradient="bg-gradient-to-br from-amber-500/20 to-amber-500/5" icon="📅" delay={100} />
+      </div>
+
+      {relays.length === 0 ? (
+        <div className="glass rounded-2xl p-12 text-center animate-fade-in">
+          <div className="text-5xl mb-4 opacity-30">🔍</div>
+          <p className="text-lg font-semibold text-white/60">{t('mexanikView.empty')}</p>
+        </div>
+      ) : (
+        <div className="glass rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-white/80">
+              {selectedMonth !== null
+                ? (selectedMonth ? formatMonth(selectedMonth, lang) : t('mexanikView.unknownMonth'))
+                : t('mexanikView.byMonth')}
+            </h3>
+            {selectedMonth !== null && (
+              <button onClick={() => onSelectMonth(null)}
+                className="text-xs font-medium text-white/50 transition hover:text-white">
+                ← {t('common.back')}
+              </button>
+            )}
+          </div>
+          {selectedMonth === null ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {monthCounts.map((item) => (
+                <button key={item.month || 'unknown'} onClick={() => onSelectMonth(item.month)}
+                  className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2 text-left transition hover:bg-white/10">
+                  <span className="text-sm text-white/70 truncate">{item.month ? formatMonth(item.month, lang) : t('mexanikView.unknownMonth')}</span>
+                  <span className="flex-shrink-0 rounded-md bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-xs font-bold text-emerald-400">{item.count}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {monthRelays.map((relay) => (
+                <div key={relay.id} className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-white truncate">{relay.name}</p>
+                    <p className="text-[10px] font-mono text-white/30">№ {relay.num} · {getStationName(relay.stationId)}</p>
+                  </div>
+                  <p className="text-xs text-white/40 flex-shrink-0">{relay.lastCheck}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function RelayDashboard() {
   const [stations, setStations] = useState([]);
   const [relays, setRelays] = useState([]);
@@ -212,7 +272,7 @@ export default function RelayDashboard() {
   const [deleteUchastkaId, setDeleteUchastkaId] = useState(null);
   const [uchastkaFormError, setUchastkaFormError] = useState('');
   const [mexaniklar, setMexaniklar] = useState([]);
-  const [newMexanik, setNewMexanik] = useState({ name: '' });
+  const [newMexanik, setNewMexanik] = useState({ name: '', username: '', password: '' });
   const [editingMexanik, setEditingMexanik] = useState(null);
   const [deleteMexanikId, setDeleteMexanikId] = useState(null);
   const [mexanikFormError, setMexanikFormError] = useState('');
@@ -302,6 +362,10 @@ export default function RelayDashboard() {
     }
   }, [auth]);
 
+  useEffect(() => {
+    if (auth?.isMexanik) setViewMexanik(auth.id);
+  }, [auth]);
+
   const stationRelays = relays
     .map((r) => ({ ...r, status: getRelayStatusFromDate(r.nextCheck) }))
     .filter((relay) =>
@@ -378,14 +442,6 @@ export default function RelayDashboard() {
         .map((r) => ({ ...r, status: getRelayStatusFromDate(r.nextCheck) }))
         .sort((a, b) => (b.lastCheck || '').localeCompare(a.lastCheck || ''))
     : [];
-  const viewMexanikNameCounts = Object.values(
-    viewMexanikRelays.reduce((acc, r) => {
-      const key = r.name || '—';
-      acc[key] = acc[key] || { name: key, count: 0 };
-      acc[key].count += 1;
-      return acc;
-    }, {})
-  ).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   const viewMexanikMonthCounts = Object.values(
     viewMexanikRelays.reduce((acc, r) => {
       const key = r.lastCheck ? r.lastCheck.slice(0, 7) : '';
@@ -396,7 +452,6 @@ export default function RelayDashboard() {
   ).sort((a, b) => b.month.localeCompare(a.month));
   const thisMonthKey = new Date().toISOString().slice(0, 7);
   const viewMexanikThisMonthRelays = viewMexanikRelays.filter((r) => r.lastCheck && r.lastCheck.slice(0, 7) === thisMonthKey);
-  const viewMexanikThisMonth = viewMexanikThisMonthRelays.length;
   const viewMexanikMonthRelays = viewMexanikMonth !== null
     ? viewMexanikRelays.filter((r) => (r.lastCheck ? r.lastCheck.slice(0, 7) : '') === viewMexanikMonth)
     : [];
@@ -416,6 +471,27 @@ export default function RelayDashboard() {
 
   const handleLogin = async (event) => {
     event.preventDefault();
+    if (loginStation.startsWith('mexanik:')) {
+      const mexId = loginStation.slice('mexanik:'.length);
+      const { data, error } = await supabase.rpc('verify_mexanik_login', {
+        p_id: mexId,
+        p_username: loginUsername,
+        p_password: loginPassword,
+      });
+      const mech = data?.[0];
+      if (error || !mech) {
+        setLoginError(t('login.error'));
+        return;
+      }
+      const authObj = { id: mech.id, name: mech.name, isMexanik: true };
+      setAuth(authObj);
+      try { localStorage.setItem('rc_auth', JSON.stringify(authObj)); } catch {}
+      setViewMexanik(mech.id);
+      setLoginError('');
+      setLoginPassword('');
+      setLoginUsername('');
+      return;
+    }
     const { data, error } = await supabase.rpc('verify_station_login', {
       p_id: loginStation,
       p_username: loginUsername,
@@ -571,18 +647,26 @@ export default function RelayDashboard() {
       setMexanikFormError(t('errors.mexanikExists', newMexanik.name));
       return;
     }
-    const row = { id: newId, name: newMexanik.name };
+    const row = { id: newId, name: newMexanik.name, username: newMexanik.username.trim() || null };
     const { error } = await supabase.from('mexaniklar').insert(row);
     if (error) { setMexanikFormError(error.message); return; }
+    if (newMexanik.username.trim() && newMexanik.password.trim()) {
+      const { error: pwError } = await supabase.rpc('set_mexanik_password', { p_id: newId, p_password: newMexanik.password.trim() });
+      if (pwError) { setMexanikFormError(pwError.message); return; }
+    }
     setMexaniklar([...mexaniklar, row]);
-    setNewMexanik({ name: '' });
+    setNewMexanik({ name: '', username: '', password: '' });
   };
 
   const handleUpdateMexanik = async () => {
     if (!editingMexanik) return;
-    const row = { id: editingMexanik.id, name: editingMexanik.name };
+    const row = { id: editingMexanik.id, name: editingMexanik.name, username: editingMexanik.username.trim() || null };
     const { error } = await supabase.from('mexaniklar').update(row).eq('id', row.id);
     if (error) return;
+    if (editingMexanik.password.trim()) {
+      const { error: pwError } = await supabase.rpc('set_mexanik_password', { p_id: row.id, p_password: editingMexanik.password.trim() });
+      if (pwError) return;
+    }
     setMexaniklar(mexaniklar.map((m) => m.id === row.id ? row : m));
     setEditingMexanik(null);
   };
@@ -658,18 +742,6 @@ export default function RelayDashboard() {
         y += 8;
       });
     }
-    y += 4;
-
-    if (y > 260) { doc.addPage(); y = 20; }
-    doc.setFont('Roboto', 'bold');
-    doc.text('Rele nomi bo\'yicha statistika', 14, y);
-    y += 8;
-    doc.setFont('Roboto', 'normal');
-    viewMexanikNameCounts.forEach((item) => {
-      if (y > 280) { doc.addPage(); y = 20; }
-      doc.text(`  ${item.name} — ${item.count} ta`, 14, y);
-      y += 7;
-    });
     y += 4;
 
     if (y > 260) { doc.addPage(); y = 20; }
@@ -798,7 +870,16 @@ export default function RelayDashboard() {
                       <label className="text-xs font-medium text-white/60 uppercase tracking-wider">{t('common.station')}</label>
                       <select value={loginStation} onChange={(e) => setLoginStation(e.target.value)}
                         className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-black outline-none transition focus:border-amber-500/50 focus:bg-white/10">
-                        {stations.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        <optgroup label={t('nav.stations')}>
+                          {stations.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </optgroup>
+                        {mexaniklar.filter((m) => m.username).length > 0 && (
+                          <optgroup label={t('nav.mexaniklar')}>
+                            {mexaniklar.filter((m) => m.username).map((m) => (
+                              <option key={m.id} value={`mexanik:${m.id}`}>{m.name}</option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     </div>
                     <div className="space-y-1.5">
@@ -839,6 +920,66 @@ export default function RelayDashboard() {
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (auth?.isMexanik) {
+    return (
+      <div className={`${bgClass} min-h-screen font-sans transition-colors duration-300`}>
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-amber-500/10 blur-[120px] animate-float" />
+          <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-[120px] animate-float" style={{ animationDelay: '-3s' }} />
+        </div>
+        <div className="relative flex items-center justify-between gap-3 px-4 py-4 lg:px-6 glass border-b border-white/5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/20">
+              <span className="text-lg font-black text-slate-950">R</span>
+            </div>
+            <div>
+              <h1 className="text-sm font-bold tracking-widest text-white">RELE CONTROL</h1>
+              <p className="text-[9px] tracking-[0.2em] text-white/30 uppercase">{t('app.tagline')}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <LanguageToggle lang={lang} onCycle={cycleLang} />
+            <ThemeToggle theme={theme} onToggle={toggleTheme} t={t} />
+            <button onClick={handleLogout}
+              className="flex items-center gap-2 rounded-xl bg-white/5 px-4 py-2.5 text-xs font-semibold text-white/50 transition hover:bg-red-500/10 hover:text-red-400">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              {t('sidebar.logout')}
+            </button>
+          </div>
+        </div>
+
+        <main className="relative max-w-5xl mx-auto px-4 py-6 lg:px-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-black text-white">{viewMexanikData?.name}</h2>
+              <p className="text-sm text-white/40 mt-1">{t('mexanikView.subtitle')}</p>
+            </div>
+            {viewMexanikRelays.length > 0 && (
+              <button onClick={exportMexanikMonthPDF}
+                className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20">
+                {t('common.pdfExport')}
+              </button>
+            )}
+          </div>
+
+          <MexanikStatsPanel
+            t={t} lang={lang}
+            relays={viewMexanikRelays}
+            thisMonthRelays={viewMexanikThisMonthRelays}
+            thisMonthKey={thisMonthKey}
+            monthCounts={viewMexanikMonthCounts}
+            selectedMonth={viewMexanikMonth}
+            onSelectMonth={setViewMexanikMonth}
+            monthRelays={viewMexanikMonthRelays}
+            getStationName={getStationName}
+          />
+        </main>
       </div>
     );
   }
@@ -1118,70 +1259,17 @@ export default function RelayDashboard() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3 lg:gap-4">
-                <StatCard label={t('mexanikView.totalChecked')} value={viewMexanikRelays.length} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0} />
-                <StatCard label={`${t('mexanikView.thisMonth')} — ${formatMonth(thisMonthKey, lang)}`} value={viewMexanikThisMonth} gradient="bg-gradient-to-br from-amber-500/20 to-amber-500/5" icon="📅" delay={100} />
-              </div>
-
-              {viewMexanikRelays.length === 0 ? (
-                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                  <div className="text-5xl mb-4 opacity-30">🔍</div>
-                  <p className="text-lg font-semibold text-white/60">{t('mexanikView.empty')}</p>
-                </div>
-              ) : (
-                <>
-                  <div className="glass rounded-2xl p-5">
-                    <h3 className="text-sm font-bold text-white/80 mb-4">{t('mexanikView.byName')}</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {viewMexanikNameCounts.map((item) => (
-                        <div key={item.name} className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2">
-                          <span className="text-sm text-white/70 truncate">{item.name}</span>
-                          <span className="flex-shrink-0 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-xs font-bold text-amber-400">{item.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="glass rounded-2xl p-5">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-bold text-white/80">
-                        {viewMexanikMonth !== null
-                          ? (viewMexanikMonth ? formatMonth(viewMexanikMonth, lang) : t('mexanikView.unknownMonth'))
-                          : t('mexanikView.byMonth')}
-                      </h3>
-                      {viewMexanikMonth !== null && (
-                        <button onClick={() => setViewMexanikMonth(null)}
-                          className="text-xs font-medium text-white/50 transition hover:text-white">
-                          ← {t('common.back')}
-                        </button>
-                      )}
-                    </div>
-                    {viewMexanikMonth === null ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {viewMexanikMonthCounts.map((item) => (
-                          <button key={item.month || 'unknown'} onClick={() => setViewMexanikMonth(item.month)}
-                            className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2 text-left transition hover:bg-white/10">
-                            <span className="text-sm text-white/70 truncate">{item.month ? formatMonth(item.month, lang) : t('mexanikView.unknownMonth')}</span>
-                            <span className="flex-shrink-0 rounded-md bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-xs font-bold text-emerald-400">{item.count}</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {viewMexanikMonthRelays.map((relay) => (
-                          <div key={relay.id} className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2.5">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-white truncate">{relay.name}</p>
-                              <p className="text-[10px] font-mono text-white/30">№ {relay.num} · {getStationName(relay.stationId)}</p>
-                            </div>
-                            <p className="text-xs text-white/40 flex-shrink-0">{relay.lastCheck}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
+              <MexanikStatsPanel
+                t={t} lang={lang}
+                relays={viewMexanikRelays}
+                thisMonthRelays={viewMexanikThisMonthRelays}
+                thisMonthKey={thisMonthKey}
+                monthCounts={viewMexanikMonthCounts}
+                selectedMonth={viewMexanikMonth}
+                onSelectMonth={setViewMexanikMonth}
+                monthRelays={viewMexanikMonthRelays}
+                getStationName={getStationName}
+              />
             </div>
           ) : (
           <>
@@ -1776,7 +1864,7 @@ export default function RelayDashboard() {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center justify-end gap-2">
-                                <button onClick={() => setEditingMexanik({ id: m.id, name: m.name })}
+                                <button onClick={() => setEditingMexanik({ id: m.id, name: m.name, username: m.username || '', password: '' })}
                                   className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                                   {t('common.edit')}
                                 </button>
@@ -1805,7 +1893,7 @@ export default function RelayDashboard() {
                           </button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <button onClick={() => setEditingMexanik({ id: m.id, name: m.name })}
+                          <button onClick={() => setEditingMexanik({ id: m.id, name: m.name, username: m.username || '', password: '' })}
                             className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                             {t('common.edit')}
                           </button>
@@ -1828,7 +1916,18 @@ export default function RelayDashboard() {
               <p className="text-sm text-white/40 mb-5">{t('addMexanik.subtitle')}</p>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-white/60">{t('field.mechanicName')}</label>
-                <input value={newMexanik.name} onChange={(e) => setNewMexanik({ name: e.target.value })}
+                <input value={newMexanik.name} onChange={(e) => setNewMexanik({ ...newMexanik, name: e.target.value })}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
+              </div>
+              <div className="space-y-1.5 mt-4">
+                <label className="text-xs font-medium text-white/60">{t('field.username')}</label>
+                <input value={newMexanik.username} onChange={(e) => setNewMexanik({ ...newMexanik, username: e.target.value })}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
+                <p className="text-[10px] text-white/30">{t('addMexanik.loginHint')}</p>
+              </div>
+              <div className="space-y-1.5 mt-4">
+                <label className="text-xs font-medium text-white/60">{t('field.password')}</label>
+                <input type="password" value={newMexanik.password} onChange={(e) => setNewMexanik({ ...newMexanik, password: e.target.value })}
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
               </div>
               {mexanikFormError && (
@@ -2097,6 +2196,19 @@ export default function RelayDashboard() {
             <label className="text-xs font-medium text-white/60">{t('field.mechanicName')}</label>
             <input value={editingMexanik?.name || ''} onChange={(e) => setEditingMexanik({ ...editingMexanik, name: e.target.value })}
               className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
+          </div>
+          <div className="space-y-1.5 mt-4">
+            <label className="text-xs font-medium text-white/60">{t('field.username')}</label>
+            <input value={editingMexanik?.username || ''} onChange={(e) => setEditingMexanik({ ...editingMexanik, username: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
+            <p className="text-[10px] text-white/30">{t('addMexanik.loginHint')}</p>
+          </div>
+          <div className="space-y-1.5 mt-4">
+            <label className="text-xs font-medium text-white/60">{t('editStation.passwordLabel')}</label>
+            <input type="password" value={editingMexanik?.password || ''} onChange={(e) => setEditingMexanik({ ...editingMexanik, password: e.target.value })}
+              placeholder={t('editStation.passwordPlaceholder')}
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
+            <p className="text-[10px] text-white/30">{t('editStation.passwordHint')}</p>
           </div>
           <div className="mt-5 flex gap-3">
             <button onClick={handleUpdateMexanik}
