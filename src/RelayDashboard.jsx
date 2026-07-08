@@ -226,6 +226,7 @@ export default function RelayDashboard() {
   const [qrPreviewRelay, setQrPreviewRelay] = useState(null);
   const [viewStation, setViewStation] = useState(null);
   const [viewMexanik, setViewMexanik] = useState(null);
+  const [viewMexanikMonth, setViewMexanikMonth] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [publicUrl, setPublicUrl] = useState(() => {
     try { return localStorage.getItem('rc_public_url') || ''; } catch { return ''; }
@@ -396,6 +397,9 @@ export default function RelayDashboard() {
   const thisMonthKey = new Date().toISOString().slice(0, 7);
   const viewMexanikThisMonthRelays = viewMexanikRelays.filter((r) => r.lastCheck && r.lastCheck.slice(0, 7) === thisMonthKey);
   const viewMexanikThisMonth = viewMexanikThisMonthRelays.length;
+  const viewMexanikMonthRelays = viewMexanikMonth !== null
+    ? viewMexanikRelays.filter((r) => (r.lastCheck ? r.lastCheck.slice(0, 7) : '') === viewMexanikMonth)
+    : [];
 
   const printQRCode = async (relay) => {
     const canvas = document.createElement('canvas');
@@ -441,6 +445,7 @@ export default function RelayDashboard() {
     setSelectedRelay(null);
     setViewStation(null);
     setViewMexanik(null);
+    setViewMexanikMonth(null);
     setLoginPassword('');
     setLoginUsername('');
     setLoginError('');
@@ -887,7 +892,7 @@ export default function RelayDashboard() {
               const isExpanded = item.children && (activeNav === item.id || item.children.some((c) => c.id === activeNav));
               return (
                 <div key={item.id}>
-                  <button onClick={() => { setActiveNav(item.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); }}
+                  <button onClick={() => { setActiveNav(item.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); setViewMexanikMonth(null); }}
                     className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
                       activeNav === item.id
                         ? 'bg-amber-500/15 text-amber-400 shadow-sm'
@@ -906,7 +911,7 @@ export default function RelayDashboard() {
                   {isExpanded && item.children && auth?.id === 'admin' && (
                     <div className="ml-3 mt-1 space-y-0.5 border-l border-white/5 pl-2">
                       {item.children.map((child) => (
-                        <button key={child.id} onClick={() => { setActiveNav(child.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); }}
+                        <button key={child.id} onClick={() => { setActiveNav(child.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); setViewMexanikMonth(null); }}
                           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
                             activeNav === child.id
                               ? 'bg-amber-500/10 text-amber-400'
@@ -1094,7 +1099,7 @@ export default function RelayDashboard() {
             <div className="space-y-6 animate-fade-in">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setViewMexanik(null)}
+                  <button onClick={() => { setViewMexanik(null); setViewMexanikMonth(null); }}
                     className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white">
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -1138,15 +1143,42 @@ export default function RelayDashboard() {
                   </div>
 
                   <div className="glass rounded-2xl p-5">
-                    <h3 className="text-sm font-bold text-white/80 mb-4">{t('mexanikView.byMonth')}</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {viewMexanikMonthCounts.map((item) => (
-                        <div key={item.month || 'unknown'} className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2">
-                          <span className="text-sm text-white/70 truncate">{item.month ? formatMonth(item.month, lang) : t('mexanikView.unknownMonth')}</span>
-                          <span className="flex-shrink-0 rounded-md bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-xs font-bold text-emerald-400">{item.count}</span>
-                        </div>
-                      ))}
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-bold text-white/80">
+                        {viewMexanikMonth !== null
+                          ? (viewMexanikMonth ? formatMonth(viewMexanikMonth, lang) : t('mexanikView.unknownMonth'))
+                          : t('mexanikView.byMonth')}
+                      </h3>
+                      {viewMexanikMonth !== null && (
+                        <button onClick={() => setViewMexanikMonth(null)}
+                          className="text-xs font-medium text-white/50 transition hover:text-white">
+                          ← {t('common.back')}
+                        </button>
+                      )}
                     </div>
+                    {viewMexanikMonth === null ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {viewMexanikMonthCounts.map((item) => (
+                          <button key={item.month || 'unknown'} onClick={() => setViewMexanikMonth(item.month)}
+                            className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2 text-left transition hover:bg-white/10">
+                            <span className="text-sm text-white/70 truncate">{item.month ? formatMonth(item.month, lang) : t('mexanikView.unknownMonth')}</span>
+                            <span className="flex-shrink-0 rounded-md bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-xs font-bold text-emerald-400">{item.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {viewMexanikMonthRelays.map((relay) => (
+                          <div key={relay.id} className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2.5">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-white truncate">{relay.name}</p>
+                              <p className="text-[10px] font-mono text-white/30">№ {relay.num} · {getStationName(relay.stationId)}</p>
+                            </div>
+                            <p className="text-xs text-white/40 flex-shrink-0">{relay.lastCheck}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -1737,7 +1769,7 @@ export default function RelayDashboard() {
                           <tr key={m.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
                             <td className="px-4 py-3 text-white/60">{idx + 1}</td>
                             <td className="px-4 py-3">
-                              <button onClick={() => setViewMexanik(m.id)}
+                              <button onClick={() => { setViewMexanik(m.id); setViewMexanikMonth(null); }}
                                 className="font-semibold text-white hover:text-amber-400 transition">
                                 {m.name}
                               </button>
@@ -1767,7 +1799,7 @@ export default function RelayDashboard() {
                           {m.name.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <button onClick={() => setViewMexanik(m.id)}
+                          <button onClick={() => { setViewMexanik(m.id); setViewMexanikMonth(null); }}
                             className="text-sm font-bold text-white hover:text-amber-400 transition">
                             {m.name}
                           </button>
