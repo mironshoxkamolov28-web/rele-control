@@ -216,6 +216,7 @@ export default function RelayDashboard() {
   const t = createTranslator(lang);
   const [qrPreviewRelay, setQrPreviewRelay] = useState(null);
   const [viewStation, setViewStation] = useState(null);
+  const [viewMexanik, setViewMexanik] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [publicUrl, setPublicUrl] = useState(() => {
     try { return localStorage.getItem('rc_public_url') || ''; } catch { return ''; }
@@ -360,6 +361,32 @@ export default function RelayDashboard() {
     }, {})
   ).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
+  const viewMexanikData = viewMexanik ? mexaniklar.find((m) => m.id === viewMexanik) : null;
+  const viewMexanikRelays = viewMexanikData
+    ? relays
+        .filter((r) => (r.note || '').split(',').map((s) => s.trim()).includes(viewMexanikData.name))
+        .map((r) => ({ ...r, status: getRelayStatusFromDate(r.nextCheck) }))
+        .sort((a, b) => (b.lastCheck || '').localeCompare(a.lastCheck || ''))
+    : [];
+  const viewMexanikNameCounts = Object.values(
+    viewMexanikRelays.reduce((acc, r) => {
+      const key = r.name || '—';
+      acc[key] = acc[key] || { name: key, count: 0 };
+      acc[key].count += 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  const viewMexanikMonthCounts = Object.values(
+    viewMexanikRelays.reduce((acc, r) => {
+      const key = r.lastCheck ? r.lastCheck.slice(0, 7) : '';
+      acc[key] = acc[key] || { month: key, count: 0 };
+      acc[key].count += 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b.month.localeCompare(a.month));
+  const thisMonthKey = new Date().toISOString().slice(0, 7);
+  const viewMexanikThisMonth = viewMexanikMonthCounts.find((m) => m.month === thisMonthKey)?.count || 0;
+
   const printQRCode = async (relay) => {
     const canvas = document.createElement('canvas');
     await QRCode.toCanvas(canvas, qrUrl(relay), {
@@ -403,6 +430,7 @@ export default function RelayDashboard() {
     } catch {}
     setSelectedRelay(null);
     setViewStation(null);
+    setViewMexanik(null);
     setLoginPassword('');
     setLoginUsername('');
     setLoginError('');
@@ -791,7 +819,7 @@ export default function RelayDashboard() {
               const isExpanded = item.children && (activeNav === item.id || item.children.some((c) => c.id === activeNav));
               return (
                 <div key={item.id}>
-                  <button onClick={() => { setActiveNav(item.id); setSidebarOpen(false); setViewStation(null); }}
+                  <button onClick={() => { setActiveNav(item.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); }}
                     className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
                       activeNav === item.id
                         ? 'bg-amber-500/15 text-amber-400 shadow-sm'
@@ -810,7 +838,7 @@ export default function RelayDashboard() {
                   {isExpanded && item.children && auth?.id === 'admin' && (
                     <div className="ml-3 mt-1 space-y-0.5 border-l border-white/5 pl-2">
                       {item.children.map((child) => (
-                        <button key={child.id} onClick={() => { setActiveNav(child.id); setSidebarOpen(false); setViewStation(null); }}
+                        <button key={child.id} onClick={() => { setActiveNav(child.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); }}
                           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
                             activeNav === child.id
                               ? 'bg-amber-500/10 text-amber-400'
@@ -993,6 +1021,59 @@ export default function RelayDashboard() {
                   );
                 })}
               </div>
+            </div>
+          ) : viewMexanik ? (
+            <div className="space-y-6 animate-fade-in">
+              <div className="flex items-center gap-3">
+                <button onClick={() => setViewMexanik(null)}
+                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <div>
+                  <h2 className="text-2xl font-black text-white">{viewMexanikData?.name}</h2>
+                  <p className="text-sm text-white/40 mt-1">{t('mexanikView.subtitle')}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 lg:gap-4">
+                <StatCard label={t('mexanikView.totalChecked')} value={viewMexanikRelays.length} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0} />
+                <StatCard label={t('mexanikView.thisMonth')} value={viewMexanikThisMonth} gradient="bg-gradient-to-br from-amber-500/20 to-amber-500/5" icon="📅" delay={100} />
+              </div>
+
+              {viewMexanikRelays.length === 0 ? (
+                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
+                  <div className="text-5xl mb-4 opacity-30">🔍</div>
+                  <p className="text-lg font-semibold text-white/60">{t('mexanikView.empty')}</p>
+                </div>
+              ) : (
+                <>
+                  <div className="glass rounded-2xl p-5">
+                    <h3 className="text-sm font-bold text-white/80 mb-4">{t('mexanikView.byName')}</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {viewMexanikNameCounts.map((item) => (
+                        <div key={item.name} className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2">
+                          <span className="text-sm text-white/70 truncate">{item.name}</span>
+                          <span className="flex-shrink-0 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-xs font-bold text-amber-400">{item.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="glass rounded-2xl p-5">
+                    <h3 className="text-sm font-bold text-white/80 mb-4">{t('mexanikView.byMonth')}</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {viewMexanikMonthCounts.map((item) => (
+                        <div key={item.month || 'unknown'} className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2">
+                          <span className="text-sm text-white/70 truncate">{item.month || t('mexanikView.unknownMonth')}</span>
+                          <span className="flex-shrink-0 rounded-md bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-xs font-bold text-emerald-400">{item.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
           <>
@@ -1579,7 +1660,12 @@ export default function RelayDashboard() {
                         {mexaniklar.map((m, idx) => (
                           <tr key={m.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
                             <td className="px-4 py-3 text-white/60">{idx + 1}</td>
-                            <td className="px-4 py-3 font-semibold text-white">{m.name}</td>
+                            <td className="px-4 py-3">
+                              <button onClick={() => setViewMexanik(m.id)}
+                                className="font-semibold text-white hover:text-amber-400 transition">
+                                {m.name}
+                              </button>
+                            </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center justify-end gap-2">
                                 <button onClick={() => setEditingMexanik({ id: m.id, name: m.name })}
@@ -1605,7 +1691,10 @@ export default function RelayDashboard() {
                           {m.name.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-white">{m.name}</p>
+                          <button onClick={() => setViewMexanik(m.id)}
+                            className="text-sm font-bold text-white hover:text-amber-400 transition">
+                            {m.name}
+                          </button>
                         </div>
                         <div className="flex items-center gap-2">
                           <button onClick={() => setEditingMexanik({ id: m.id, name: m.name })}

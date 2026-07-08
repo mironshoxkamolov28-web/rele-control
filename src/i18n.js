@@ -79,6 +79,14 @@ export const translations = {
     'stationView.empty': "Bu stansiyada rele yo'q",
     'stationView.byName': "Rele nomi bo'yicha statistika",
 
+    'mexanikView.subtitle': "Mexanik bo'yicha statistika",
+    'mexanikView.totalChecked': "Jami tekshirilgan relelar",
+    'mexanikView.thisMonth': "Bu oyda tekshirilgan",
+    'mexanikView.byName': "Rele nomi bo'yicha statistika",
+    'mexanikView.byMonth': "Oylar bo'yicha statistika",
+    'mexanikView.unknownMonth': "Sana kiritilmagan",
+    'mexanikView.empty': "Bu mexanik hali hech qanday relega biriktirilmagan",
+
     'table.status': "Status",
     'table.name': "Nomi",
     'table.stativ': "Stativ",
@@ -261,6 +269,14 @@ export const translations = {
     'stationView.empty': "На этой станции нет реле",
     'stationView.byName': "Статистика по названию реле",
 
+    'mexanikView.subtitle': "Статистика по механику",
+    'mexanikView.totalChecked': "Всего проверено реле",
+    'mexanikView.thisMonth': "Проверено в этом месяце",
+    'mexanikView.byName': "Статистика по названию реле",
+    'mexanikView.byMonth': "Статистика по месяцам",
+    'mexanikView.unknownMonth': "Дата не указана",
+    'mexanikView.empty': "Этот механик ещё не привязан ни к одному реле",
+
     'table.status': "Статус",
     'table.name': "Название",
     'table.stativ': "Статив",
@@ -442,6 +458,14 @@ export const translations = {
     'stationView.subtitle': "Station stats and relays",
     'stationView.empty': "No relays at this station",
     'stationView.byName': "Statistics by relay name",
+
+    'mexanikView.subtitle': "Mechanic statistics",
+    'mexanikView.totalChecked': "Total relays checked",
+    'mexanikView.thisMonth': "Checked this month",
+    'mexanikView.byName': "Statistics by relay name",
+    'mexanikView.byMonth': "Statistics by month",
+    'mexanikView.unknownMonth': "No date set",
+    'mexanikView.empty': "This mechanic hasn't been assigned to any relay yet",
 
     'table.status': "Status",
     'table.name': "Name",
