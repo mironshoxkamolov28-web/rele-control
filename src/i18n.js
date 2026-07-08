@@ -579,3 +579,17 @@ export function createTranslator(lang) {
     return typeof entry === 'function' ? entry(...args) : entry;
   };
 }
+
+const MONTH_NAMES = {
+  uz: ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"],
+  ru: ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"],
+  en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+};
+
+export function formatMonth(monthKey, lang) {
+  if (!monthKey) return '';
+  const [year, month] = monthKey.split('-');
+  const names = MONTH_NAMES[lang] || MONTH_NAMES.uz;
+  const name = names[parseInt(month, 10) - 1] || monthKey;
+  return `${name} ${year}`;
+}

@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 import { supabase, toRelay, fromRelay } from './supabase.js';
-import { LANGS, createTranslator } from './i18n.js';
+import { LANGS, createTranslator, formatMonth } from './i18n.js';
 
 function getPublicUrl() {
   try { return localStorage.getItem('rc_public_url') || window.location.origin; } catch { return window.location.origin; }
@@ -385,7 +385,8 @@ export default function RelayDashboard() {
     }, {})
   ).sort((a, b) => b.month.localeCompare(a.month));
   const thisMonthKey = new Date().toISOString().slice(0, 7);
-  const viewMexanikThisMonth = viewMexanikMonthCounts.find((m) => m.month === thisMonthKey)?.count || 0;
+  const viewMexanikThisMonthRelays = viewMexanikRelays.filter((r) => r.lastCheck && r.lastCheck.slice(0, 7) === thisMonthKey);
+  const viewMexanikThisMonth = viewMexanikThisMonthRelays.length;
 
   const printQRCode = async (relay) => {
     const canvas = document.createElement('canvas');
@@ -612,6 +613,23 @@ export default function RelayDashboard() {
       y += 4;
     });
     doc.save('oylik-reja.pdf');
+  };
+
+  const exportMexanikMonthPDF = () => {
+    if (!viewMexanikData) return;
+    const monthLabel = formatMonth(thisMonthKey, 'uz');
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(`${viewMexanikData.name} — ${monthLabel}`, 14, 16);
+    doc.setFontSize(10);
+    doc.text(`Bu oyda tekshirilgan relelar: ${viewMexanikThisMonthRelays.length} ta`, 14, 24);
+    let y = 36;
+    viewMexanikThisMonthRelays.forEach((r, i) => {
+      if (y > 280) { doc.addPage(); y = 20; }
+      doc.text(`${i + 1}. ${r.name} (${r.num}) — ${getStationName(r.stationId)} — ${r.lastCheck}`, 14, y);
+      y += 8;
+    });
+    doc.save(`mexanik-${viewMexanikData.id}-${thisMonthKey}.pdf`);
   };
 
   const filteredNav = navItems.filter((item) => (item.adminOnly ? auth?.id === 'admin' : true));
@@ -1024,22 +1042,30 @@ export default function RelayDashboard() {
             </div>
           ) : viewMexanik ? (
             <div className="space-y-6 animate-fade-in">
-              <div className="flex items-center gap-3">
-                <button onClick={() => setViewMexanik(null)}
-                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white">
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <div>
-                  <h2 className="text-2xl font-black text-white">{viewMexanikData?.name}</h2>
-                  <p className="text-sm text-white/40 mt-1">{t('mexanikView.subtitle')}</p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setViewMexanik(null)}
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <div>
+                    <h2 className="text-2xl font-black text-white">{viewMexanikData?.name}</h2>
+                    <p className="text-sm text-white/40 mt-1">{t('mexanikView.subtitle')}</p>
+                  </div>
                 </div>
+                {viewMexanikThisMonthRelays.length > 0 && (
+                  <button onClick={exportMexanikMonthPDF}
+                    className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20">
+                    {t('common.pdfExport')}
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <StatCard label={t('mexanikView.totalChecked')} value={viewMexanikRelays.length} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0} />
-                <StatCard label={t('mexanikView.thisMonth')} value={viewMexanikThisMonth} gradient="bg-gradient-to-br from-amber-500/20 to-amber-500/5" icon="📅" delay={100} />
+                <StatCard label={`${t('mexanikView.thisMonth')} — ${formatMonth(thisMonthKey, lang)}`} value={viewMexanikThisMonth} gradient="bg-gradient-to-br from-amber-500/20 to-amber-500/5" icon="📅" delay={100} />
               </div>
 
               {viewMexanikRelays.length === 0 ? (
@@ -1066,7 +1092,7 @@ export default function RelayDashboard() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                       {viewMexanikMonthCounts.map((item) => (
                         <div key={item.month || 'unknown'} className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2">
-                          <span className="text-sm text-white/70 truncate">{item.month || t('mexanikView.unknownMonth')}</span>
+                          <span className="text-sm text-white/70 truncate">{item.month ? formatMonth(item.month, lang) : t('mexanikView.unknownMonth')}</span>
                           <span className="flex-shrink-0 rounded-md bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-xs font-bold text-emerald-400">{item.count}</span>
                         </div>
                       ))}
