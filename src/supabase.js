@@ -13,6 +13,7 @@ export const toRelay = (row) => ({
   object: row.object || '',
   manzil: row.manzil || '',
   stativ: row.stativ || '',
+  lastCheck: row.last_check || '',
   nextCheck: row.next_check || '',
   note: row.note || '',
 });
@@ -24,6 +25,7 @@ export const fromRelay = (relay) => ({
   object: relay.object || null,
   manzil: relay.manzil || null,
   stativ: relay.stativ || null,
+  last_check: relay.lastCheck || null,
   next_check: relay.nextCheck || null,
   note: relay.note || null,
 });
