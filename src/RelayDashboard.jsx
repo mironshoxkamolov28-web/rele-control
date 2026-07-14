@@ -119,6 +119,7 @@ const navItems = [
     children: [{ id: 'add-mexanik', labelKey: 'nav.addMexanik' }] },
   { id: 'activity-log', labelKey: 'nav.activityLog', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', adminOnly: true },
   { id: 'settings', labelKey: 'nav.settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z', adminOnly: true },
+  { id: 'help', labelKey: 'nav.help', icon: 'M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.5m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
 ];
 
 function Modal({ isOpen, onClose, children, maxWidth = 'max-w-lg' }) {
@@ -2560,6 +2561,56 @@ export default function RelayDashboard() {
                   <p>• {t('settings.ipHintNext')} <span className="font-mono">http://192.168.x.x:5173</span></p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeNav === 'help' && (
+            <div className="space-y-4 animate-fade-in max-w-2xl">
+              <div>
+                <h2 className="text-2xl font-black text-white">{t('help.title')}</h2>
+                <p className="text-sm text-white/40 mt-1">{t('help.subtitle')}</p>
+              </div>
+
+              <div className="glass rounded-2xl p-6 space-y-3">
+                <h3 className="text-sm font-bold text-white">{t('help.basics.title')}</h3>
+                <p className="text-sm text-white/60">{t('help.basics.status')}</p>
+                <p className="text-sm text-white/60">{t('help.basics.search')}</p>
+                {auth?.id === 'admin' && <p className="text-sm text-white/60">{t('help.basics.globalSearch')}</p>}
+                <p className="text-sm text-white/60">{t('help.basics.unsaved')}</p>
+              </div>
+
+              <div className="glass rounded-2xl p-6 space-y-3">
+                <h3 className="text-sm font-bold text-white">{t('help.relays.title')}</h3>
+                {auth?.id === 'admin' && <p className="text-sm text-white/60">{t('help.relays.add')}</p>}
+                {auth?.id === 'admin' && <p className="text-sm text-white/60">{t('help.relays.edit')}</p>}
+                <p className="text-sm text-white/60">{t('help.relays.qr')}</p>
+                <p className="text-sm text-white/60">{t('help.relays.pdf')}</p>
+                <p className="text-sm text-white/60">{t('help.relays.csv')}</p>
+              </div>
+
+              {auth?.id === 'admin' && (
+                <div className="glass rounded-2xl p-6 space-y-3">
+                  <h3 className="text-sm font-bold text-white">{t('help.bulk.title')}</h3>
+                  <p className="text-sm text-white/60">{t('help.bulk.edit')}</p>
+                  <p className="text-sm text-white/60">{t('help.bulk.import')}</p>
+                  <p className="text-sm text-white/60">{t('help.bulk.search')}</p>
+                </div>
+              )}
+
+              <div className="glass rounded-2xl p-6 space-y-3">
+                <h3 className="text-sm font-bold text-white">{t('help.delete.title')}</h3>
+                <p className="text-sm text-white/60">{t('help.delete.desc')}</p>
+              </div>
+
+              {auth?.id === 'admin' && (
+                <div className="glass rounded-2xl p-6 space-y-3">
+                  <h3 className="text-sm font-bold text-white">{t('help.admin.title')}</h3>
+                  <p className="text-sm text-white/60">{t('help.admin.stations')}</p>
+                  <p className="text-sm text-white/60">{t('help.admin.uchastkalar')}</p>
+                  <p className="text-sm text-white/60">{t('help.admin.mexaniklar')}</p>
+                  <p className="text-sm text-white/60">{t('help.admin.activityLog')}</p>
+                </div>
+              )}
             </div>
           )}
           </>
