@@ -5,6 +5,8 @@ import QRCode from 'qrcode';
 import { supabase, toRelay, fromRelay } from './supabase.js';
 import { LANGS, createTranslator, formatMonth, translations } from './i18n.js';
 
+const ADMIN_AUTH_EMAIL = 'admin@relenazorat.local';
+
 function getPublicUrl() {
   try { return localStorage.getItem('rc_public_url') || window.location.origin; } catch { return window.location.origin; }
 }
@@ -444,6 +446,19 @@ export default function RelayDashboard() {
   const cycleLang = () => setLang((cur) => LANGS[(LANGS.indexOf(cur) + 1) % LANGS.length]);
 
   useEffect(() => {
+    if (auth?.id !== 'admin') return;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data?.session) {
+        setAuth(null);
+        try {
+          localStorage.removeItem('rc_auth');
+          localStorage.removeItem('rc_active_nav');
+        } catch {}
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     if (!isDirty) return;
     const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
     window.addEventListener('beforeunload', handler);
@@ -682,6 +697,27 @@ export default function RelayDashboard() {
       setLoginUsername('');
       return;
     }
+    if (loginStation === 'admin') {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: ADMIN_AUTH_EMAIL,
+        password: loginPassword,
+      });
+      if (error || !data?.user) {
+        setLoginError(t('login.error'));
+        return;
+      }
+      const authObj = { id: 'admin', name: 'ADMIN (Barcha stansiyalar)' };
+      setAuth(authObj);
+      try { localStorage.setItem('rc_auth', JSON.stringify(authObj)); } catch {}
+      setLoginError('');
+      setSearchQuery('');
+      setFilterStatus('all');
+      setSelectedRelay(null);
+      setActiveNav('dashboard');
+      setLoginPassword('');
+      setLoginUsername('');
+      return;
+    }
     const { data, error } = await supabase.rpc('verify_station_login', {
       p_id: loginStation,
       p_username: loginUsername,
@@ -702,6 +738,7 @@ export default function RelayDashboard() {
   };
 
   const handleLogout = () => {
+    supabase.auth.signOut();
     setAuth(null);
     setActiveNav('dashboard');
     try {
