@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
@@ -298,6 +298,8 @@ export default function RelayDashboard() {
   const [isDirty, setIsDirty] = useState(false);
   const [activityLog, setActivityLog] = useState([]);
   const [activityLogLoading, setActivityLogLoading] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const toastTimersRef = useRef({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [publicUrl, setPublicUrl] = useState(() => {
     try { return localStorage.getItem('rc_public_url') || ''; } catch { return ''; }
@@ -370,6 +372,12 @@ export default function RelayDashboard() {
   }, [isDirty]);
 
   const confirmDiscard = () => !isDirty || window.confirm(t('common.unsavedChangesConfirm'));
+
+  useEffect(() => {
+    return () => {
+      Object.values(toastTimersRef.current).forEach(clearTimeout);
+    };
+  }, []);
 
   useEffect(() => {
     setRelayPage(1);
@@ -583,6 +591,27 @@ export default function RelayDashboard() {
     } catch {}
   };
 
+  // O'chirishni ekranda darhol yashiradi, real o'chirishni esa "Qaytarish"
+  // bosilmasa deb kutib, bir necha soniyaga kechiktiradi.
+  const pushUndoToast = (message, onCommit, onUndo) => {
+    const toastId = `${Date.now()}-${Math.random()}`;
+    toastTimersRef.current[toastId] = setTimeout(() => {
+      delete toastTimersRef.current[toastId];
+      setToasts((cur) => cur.filter((item) => item.id !== toastId));
+      onCommit();
+    }, 7000);
+    setToasts((cur) => [...cur, {
+      id: toastId,
+      message,
+      undo: () => {
+        clearTimeout(toastTimersRef.current[toastId]);
+        delete toastTimersRef.current[toastId];
+        setToasts((cur2) => cur2.filter((item) => item.id !== toastId));
+        onUndo();
+      },
+    }]);
+  };
+
   const handleSaveEdit = async () => {
     await supabase.from('relays').update(fromRelay(selectedRelay)).eq('id', selectedRelay.id);
     setRelays(relays.map((r) => r.id === selectedRelay.id ? { ...selectedRelay } : r));
@@ -656,22 +685,41 @@ export default function RelayDashboard() {
     setEditingStation(null);
   };
 
-  const handleDeleteRelay = async (id) => {
+  const handleDeleteRelay = (id) => {
     const relay = relays.find((r) => r.id === id);
-    await supabase.from('relays').delete().eq('id', id);
-    setRelays(relays.filter((r) => r.id !== id));
-    if (relay) logActivity('delete', 'relay', `${relay.name} (${relay.num})`);
+    if (!relay) return;
+    setRelays((cur) => cur.filter((r) => r.id !== id));
+    pushUndoToast(
+      t('toast.deleted', `${relay.name} (${relay.num})`),
+      async () => {
+        await supabase.from('relays').delete().eq('id', id);
+        logActivity('delete', 'relay', `${relay.name} (${relay.num})`);
+      },
+      () => setRelays((cur) => [...cur, relay]),
+    );
   };
 
-  const handleDeleteStation = async () => {
+  const handleDeleteStation = () => {
     if (!deleteStationId) return;
-    const station = stations.find((s) => s.id === deleteStationId);
-    await supabase.from('relays').delete().eq('station_id', deleteStationId);
-    await supabase.from('stations').delete().eq('id', deleteStationId);
-    setStations(stations.filter((s) => s.id !== deleteStationId));
-    setRelays(relays.filter((r) => r.stationId !== deleteStationId));
-    if (station) logActivity('delete', 'station', station.name);
+    const stationId = deleteStationId;
+    const station = stations.find((s) => s.id === stationId);
+    const stationRelaysSnapshot = relays.filter((r) => r.stationId === stationId);
+    setStations((cur) => cur.filter((s) => s.id !== stationId));
+    setRelays((cur) => cur.filter((r) => r.stationId !== stationId));
     setDeleteStationId(null);
+    if (!station) return;
+    pushUndoToast(
+      t('toast.deleted', station.name),
+      async () => {
+        await supabase.from('relays').delete().eq('station_id', stationId);
+        await supabase.from('stations').delete().eq('id', stationId);
+        logActivity('delete', 'station', station.name);
+      },
+      () => {
+        setStations((cur) => [...cur, station]);
+        setRelays((cur) => [...cur, ...stationRelaysSnapshot]);
+      },
+    );
   };
 
   const handleAddUchastka = async () => {
@@ -702,15 +750,27 @@ export default function RelayDashboard() {
     setEditingUchastka(null);
   };
 
-  const handleDeleteUchastka = async () => {
+  const handleDeleteUchastka = () => {
     if (!deleteUchastkaId) return;
-    const uchastka = uchastkalar.find((u) => u.id === deleteUchastkaId);
-    await supabase.from('stations').update({ uchastka_id: null }).eq('uchastka_id', deleteUchastkaId);
-    await supabase.from('uchastkalar').delete().eq('id', deleteUchastkaId);
-    setStations(stations.map((s) => s.uchastka_id === deleteUchastkaId ? { ...s, uchastka_id: null } : s));
-    setUchastkalar(uchastkalar.filter((u) => u.id !== deleteUchastkaId));
-    if (uchastka) logActivity('delete', 'uchastka', uchastka.name);
+    const uchastkaId = deleteUchastkaId;
+    const uchastka = uchastkalar.find((u) => u.id === uchastkaId);
+    const affectedStationIds = stations.filter((s) => s.uchastka_id === uchastkaId).map((s) => s.id);
+    setStations((cur) => cur.map((s) => s.uchastka_id === uchastkaId ? { ...s, uchastka_id: null } : s));
+    setUchastkalar((cur) => cur.filter((u) => u.id !== uchastkaId));
     setDeleteUchastkaId(null);
+    if (!uchastka) return;
+    pushUndoToast(
+      t('toast.deleted', uchastka.name),
+      async () => {
+        await supabase.from('stations').update({ uchastka_id: null }).eq('uchastka_id', uchastkaId);
+        await supabase.from('uchastkalar').delete().eq('id', uchastkaId);
+        logActivity('delete', 'uchastka', uchastka.name);
+      },
+      () => {
+        setUchastkalar((cur) => [...cur, uchastka]);
+        setStations((cur) => cur.map((s) => affectedStationIds.includes(s.id) ? { ...s, uchastka_id: uchastkaId } : s));
+      },
+    );
   };
 
   const handleAddMexanik = async () => {
@@ -749,13 +809,21 @@ export default function RelayDashboard() {
     setEditingMexanik(null);
   };
 
-  const handleDeleteMexanik = async () => {
+  const handleDeleteMexanik = () => {
     if (!deleteMexanikId) return;
-    const mexanik = mexaniklar.find((m) => m.id === deleteMexanikId);
-    await supabase.from('mexaniklar').delete().eq('id', deleteMexanikId);
-    setMexaniklar(mexaniklar.filter((m) => m.id !== deleteMexanikId));
-    if (mexanik) logActivity('delete', 'mexanik', mexanik.name);
+    const mexanikId = deleteMexanikId;
+    const mexanik = mexaniklar.find((m) => m.id === mexanikId);
+    setMexaniklar((cur) => cur.filter((m) => m.id !== mexanikId));
     setDeleteMexanikId(null);
+    if (!mexanik) return;
+    pushUndoToast(
+      t('toast.deleted', mexanik.name),
+      async () => {
+        await supabase.from('mexaniklar').delete().eq('id', mexanikId);
+        logActivity('delete', 'mexanik', mexanik.name);
+      },
+      () => setMexaniklar((cur) => [...cur, mexanik]),
+    );
   };
 
   const exportToPDF = async () => {
@@ -2399,6 +2467,18 @@ export default function RelayDashboard() {
         onCancel={() => setDeleteMexanikId(null)}
         t={t}
       />
+
+      <div className="fixed bottom-4 right-4 z-[60] flex flex-col-reverse gap-2 items-end">
+        {toasts.map((toast) => (
+          <div key={toast.id} className="glass rounded-xl px-4 py-3 flex items-center gap-4 shadow-lg animate-fade-in max-w-sm">
+            <span className="text-sm text-white/80">{toast.message}</span>
+            <button onClick={toast.undo}
+              className="text-sm font-bold text-amber-400 transition hover:text-amber-300 whitespace-nowrap">
+              {t('common.undo')}
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

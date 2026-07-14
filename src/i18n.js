@@ -46,6 +46,9 @@ export const translations = {
     'activityLog.entity.uchastka': "Uchastka",
     'activityLog.entity.mexanik': "Mexanik",
 
+    'toast.deleted': (label) => `${label} o'chirildi`,
+    'common.undo': "Qaytarish",
+
     'status.red': "Muddati o'tgan",
     'status.yellow': "Muddati yaqin",
     'status.green': "Muddati bor",
@@ -252,6 +255,9 @@ export const translations = {
     'activityLog.entity.uchastka': "Участок",
     'activityLog.entity.mexanik': "Механик",
 
+    'toast.deleted': (label) => `${label} удалено`,
+    'common.undo': "Отменить",
+
     'status.red': "Просрочено",
     'status.yellow': "Срок скоро истекает",
     'status.green': "Срок в норме",
@@ -457,6 +463,9 @@ export const translations = {
     'activityLog.entity.station': "Station",
     'activityLog.entity.uchastka': "Sector",
     'activityLog.entity.mexanik': "Mechanic",
+
+    'toast.deleted': (label) => `${label} deleted`,
+    'common.undo': "Undo",
 
     'status.red': "Overdue",
     'status.yellow': "Due soon",
