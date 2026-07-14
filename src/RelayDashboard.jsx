@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 import { supabase, toRelay, fromRelay } from './supabase.js';
-import { LANGS, createTranslator, formatMonth } from './i18n.js';
+import { LANGS, createTranslator, formatMonth, translations } from './i18n.js';
 
 function getPublicUrl() {
   try { return localStorage.getItem('rc_public_url') || window.location.origin; } catch { return window.location.origin; }
@@ -43,6 +43,70 @@ const statusConfig = {
   green: { color: 'green', lightBg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400', bar: 'bg-emerald-500/20', barFill: 'bg-emerald-500' },
 };
 
+function csvEscape(value) {
+  const s = String(value ?? '');
+  if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  const s = text.replace(/^﻿/, '');
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (s[i + 1] === '"') { field += '"'; i++; } else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field); field = '';
+    } else if (c === '\n') {
+      row.push(field); field = ''; rows.push(row); row = [];
+    } else if (c === '\r') {
+      // ignore — paired \n handles the line break
+    } else {
+      field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim() !== ''));
+}
+
+function downloadTextFile(filename, content, mime = 'text/csv;charset=utf-8;') {
+  const blob = new Blob(['﻿' + content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+const CSV_FIELD_I18N_KEYS = {
+  'field.name': 'name',
+  'field.factoryNum': 'num',
+  'common.station': 'station',
+  'field.stativNum': 'stativ',
+  'field.lastCheck': 'lastCheck',
+  'field.nextCheck': 'nextCheck',
+  'field.checkedBy': 'note',
+};
+
+const CSV_HEADER_TO_FIELD = {};
+for (const lang of LANGS) {
+  for (const [i18nKey, fieldKey] of Object.entries(CSV_FIELD_I18N_KEYS)) {
+    const label = translations[lang]?.[i18nKey];
+    if (typeof label === 'string') CSV_HEADER_TO_FIELD[label.trim().toLowerCase()] = fieldKey;
+  }
+}
+
 const navItems = [
   { id: 'dashboard', labelKey: 'nav.dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
   { id: 'relays', labelKey: 'nav.relays', icon: 'M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z',
@@ -57,12 +121,12 @@ const navItems = [
   { id: 'settings', labelKey: 'nav.settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z', adminOnly: true },
 ];
 
-function Modal({ isOpen, onClose, children }) {
+function Modal({ isOpen, onClose, children, maxWidth = 'max-w-lg' }) {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
-      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto animate-scale-in" onClick={(e) => e.stopPropagation()}>
+      <div className={`relative w-full ${maxWidth} max-h-[90vh] overflow-y-auto animate-scale-in`} onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
     </div>
@@ -261,6 +325,9 @@ export default function RelayDashboard() {
     applyStativ: false, stativ: '',
     applyNote: false, note: '',
   });
+  const [importPreview, setImportPreview] = useState(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const importFileInputRef = useRef(null);
   const [auth, setAuth] = useState(() => {
     try {
       const saved = localStorage.getItem('rc_auth');
@@ -497,6 +564,9 @@ export default function RelayDashboard() {
       mexaniklar: mexaniklar.filter((m) => m.name.toLowerCase().includes(q)).slice(0, 6),
     };
   })();
+  const importValidRows = importPreview && !importPreview.error ? importPreview.rows.filter((r) => r.name && r.num && r.stationId) : [];
+  const importInvalidCount = importPreview && !importPreview.error ? importPreview.rows.length - importValidRows.length : 0;
+
   const globalSearchHasResults = globalSearchResults && (
     globalSearchResults.relays.length || globalSearchResults.stations.length ||
     globalSearchResults.uchastkalar.length || globalSearchResults.mexaniklar.length
@@ -946,6 +1016,79 @@ export default function RelayDashboard() {
       y += 8;
     });
     doc.save('rele-hisobot.pdf');
+  };
+
+  const csvHeaders = [t('field.name'), t('field.factoryNum'), t('common.station'), t('field.stativNum'), t('field.lastCheck'), t('field.nextCheck'), t('field.checkedBy')];
+
+  const exportRelaysToCSV = () => {
+    const rows = visibleRelays.map((r) => [r.name, r.num, getStationName(r.stationId), r.stativ, r.lastCheck, r.nextCheck, r.note]);
+    const csv = [csvHeaders, ...rows].map((row) => row.map(csvEscape).join(',')).join('\r\n');
+    downloadTextFile('relelar.csv', csv);
+  };
+
+  const downloadRelayImportTemplate = () => {
+    const example = ['RPU-3', '12345', stations.find((s) => s.id !== 'admin')?.name || '', '1-2', '2026-01-15', '2026-07-15', ''];
+    const csv = [csvHeaders, example].map((row) => row.map(csvEscape).join(',')).join('\r\n');
+    downloadTextFile('rele-shablon.csv', csv);
+  };
+
+  const handleRelayImportFile = async (file) => {
+    const text = await file.text();
+    const rows = parseCSV(text);
+    if (rows.length < 2) {
+      setImportPreview({ error: t('bulkImport.emptyFile'), rows: [] });
+      setImportModalOpen(true);
+      return;
+    }
+    const headerRow = rows[0].map((h) => h.trim().toLowerCase());
+    const fieldIndexes = {};
+    headerRow.forEach((h, idx) => {
+      const fieldKey = CSV_HEADER_TO_FIELD[h];
+      if (fieldKey) fieldIndexes[fieldKey] = idx;
+    });
+    if (fieldIndexes.name === undefined || fieldIndexes.num === undefined || fieldIndexes.station === undefined) {
+      setImportPreview({ error: t('bulkImport.missingColumns'), rows: [] });
+      setImportModalOpen(true);
+      return;
+    }
+    const parsed = rows.slice(1).map((cols) => {
+      const stationName = (cols[fieldIndexes.station] || '').trim();
+      const station = stations.find((s) => s.id !== 'admin' && s.name.trim().toLowerCase() === stationName.toLowerCase());
+      return {
+        name: (cols[fieldIndexes.name] || '').trim(),
+        num: (cols[fieldIndexes.num] || '').trim(),
+        stationName,
+        stationId: station?.id || null,
+        stativ: fieldIndexes.stativ !== undefined ? (cols[fieldIndexes.stativ] || '').trim() : '',
+        lastCheck: fieldIndexes.lastCheck !== undefined ? (cols[fieldIndexes.lastCheck] || '').trim() : '',
+        nextCheck: fieldIndexes.nextCheck !== undefined ? (cols[fieldIndexes.nextCheck] || '').trim() : '',
+        note: fieldIndexes.note !== undefined ? (cols[fieldIndexes.note] || '').trim() : '',
+      };
+    });
+    setImportPreview({ rows: parsed });
+    setImportModalOpen(true);
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreview) return;
+    const validRows = importPreview.rows.filter((r) => r.name && r.num && r.stationId);
+    if (validRows.length === 0) return;
+    const toInsert = validRows.map((r) => ({
+      station_id: r.stationId,
+      name: r.name,
+      num: r.num,
+      stativ: r.stativ || null,
+      last_check: r.lastCheck || null,
+      next_check: r.nextCheck || null,
+      note: r.note || null,
+    }));
+    const { data } = await supabase.from('relays').insert(toInsert).select();
+    if (data) {
+      setRelays((cur) => [...cur, ...data.map(toRelay)]);
+      logActivity('create', 'relay', t('bulkImport.logLabel', data.length));
+    }
+    setImportModalOpen(false);
+    setImportPreview(null);
   };
 
   const exportMonthlyPlanPDF = async () => {
@@ -1642,12 +1785,33 @@ export default function RelayDashboard() {
                   <h2 className="text-2xl font-black text-white">{t('nav.relays')}</h2>
                   <p className="text-sm text-white/40 mt-1">{t('relays.foundCount', visibleRelays.length)}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button onClick={exportToPDF}
                     className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20">
                     {t('common.pdfExport')}
                   </button>
-
+                  <button onClick={exportRelaysToCSV}
+                    className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-500/20">
+                    {t('bulkImport.csvExport')}
+                  </button>
+                  {auth?.id === 'admin' && (
+                    <>
+                      <button onClick={downloadRelayImportTemplate}
+                        className="rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/20 hover:text-white">
+                        {t('bulkImport.template')}
+                      </button>
+                      <button onClick={() => importFileInputRef.current?.click()}
+                        className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-2 text-xs font-semibold text-amber-400 transition hover:bg-amber-500/20">
+                        {t('bulkImport.importButton')}
+                      </button>
+                      <input ref={importFileInputRef} type="file" accept=".csv,text/csv" className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          if (file) handleRelayImportFile(file);
+                        }} />
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -2542,6 +2706,69 @@ export default function RelayDashboard() {
               {t('bulkEdit.applyButton')}
             </button>
             <button onClick={() => setBulkEditOpen(false)}
+              className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={importModalOpen} onClose={() => { setImportModalOpen(false); setImportPreview(null); }} maxWidth="max-w-2xl">
+        <div className="glass rounded-2xl p-6">
+          <h2 className="text-lg font-bold text-white mb-1">{t('bulkImport.title')}</h2>
+
+          {importPreview?.error ? (
+            <p className="text-sm text-red-400 mt-3">{importPreview.error}</p>
+          ) : importPreview ? (
+            <>
+              <p className="text-sm text-white/40 mb-4">
+                {t('bulkImport.summary', importValidRows.length, importInvalidCount, importPreview.rows.length)}
+              </p>
+              <div className="max-h-[45vh] overflow-y-auto rounded-xl border border-white/10">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 text-left text-white/40 uppercase tracking-wider">
+                        <th className="px-3 py-2 font-medium">{t('field.name')}</th>
+                        <th className="px-3 py-2 font-medium">{t('field.factoryNum')}</th>
+                        <th className="px-3 py-2 font-medium">{t('common.station')}</th>
+                        <th className="px-3 py-2 font-medium">{t('table.status')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreview.rows.map((r, idx) => {
+                        const valid = r.name && r.num && r.stationId;
+                        return (
+                          <tr key={idx} className="border-b border-white/5 last:border-0">
+                            <td className="px-3 py-2 text-white/70">{r.name || '—'}</td>
+                            <td className="px-3 py-2 text-white/70">{r.num || '—'}</td>
+                            <td className="px-3 py-2 text-white/70">{r.stationName || '—'}</td>
+                            <td className="px-3 py-2">
+                              {valid ? (
+                                <span className="text-emerald-400">{t('bulkImport.rowOk')}</span>
+                              ) : (
+                                <span className="text-red-400">
+                                  {!r.name || !r.num ? t('bulkImport.missingFields') : t('bulkImport.stationNotFound')}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          <div className="mt-5 flex gap-3">
+            <button onClick={handleConfirmImport}
+              disabled={importValidRows.length === 0}
+              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed">
+              {t('bulkImport.confirmButton')}
+            </button>
+            <button onClick={() => { setImportModalOpen(false); setImportPreview(null); }}
               className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
               {t('common.cancel')}
             </button>
