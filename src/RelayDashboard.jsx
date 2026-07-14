@@ -53,6 +53,7 @@ const navItems = [
     children: [{ id: 'add-uchastka', labelKey: 'nav.addUchastka' }] },
   { id: 'mexaniklar', labelKey: 'nav.mexaniklar', icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z', adminOnly: true,
     children: [{ id: 'add-mexanik', labelKey: 'nav.addMexanik' }] },
+  { id: 'activity-log', labelKey: 'nav.activityLog', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', adminOnly: true },
   { id: 'settings', labelKey: 'nav.settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z', adminOnly: true },
 ];
 
@@ -295,6 +296,8 @@ export default function RelayDashboard() {
   const [viewMexanik, setViewMexanik] = useState(null);
   const [viewMexanikMonth, setViewMexanikMonth] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [activityLog, setActivityLog] = useState([]);
+  const [activityLogLoading, setActivityLogLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [publicUrl, setPublicUrl] = useState(() => {
     try { return localStorage.getItem('rc_public_url') || ''; } catch { return ''; }
@@ -373,7 +376,7 @@ export default function RelayDashboard() {
   }, [searchQuery, filterStatus, adminFilterStation, relayPageSize]);
 
   useEffect(() => {
-    const adminOnlyNav = ['stations', 'settings', 'add-relay', 'add-station', 'uchastkalar', 'add-uchastka', 'mexaniklar', 'add-mexanik', 'monthly-plan'];
+    const adminOnlyNav = ['stations', 'settings', 'add-relay', 'add-station', 'uchastkalar', 'add-uchastka', 'mexaniklar', 'add-mexanik', 'monthly-plan', 'activity-log'];
     if (auth && auth.id !== 'admin' && adminOnlyNav.includes(activeNav)) {
       setActiveNav('dashboard');
     }
@@ -382,6 +385,16 @@ export default function RelayDashboard() {
   useEffect(() => {
     if (auth?.isMexanik) setViewMexanik(auth.id);
   }, [auth]);
+
+  useEffect(() => {
+    if (activeNav !== 'activity-log' || auth?.id !== 'admin') return;
+    setActivityLogLoading(true);
+    supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(200)
+      .then(({ data }) => {
+        setActivityLog(data || []);
+        setActivityLogLoading(false);
+      });
+  }, [activeNav, auth]);
 
   const stationRelays = relays
     .map((r) => ({ ...r, status: getRelayStatusFromDate(r.nextCheck) }))
@@ -557,9 +570,23 @@ export default function RelayDashboard() {
     setLoginError('');
   };
 
+  const logActivity = async (action, entityType, entityLabel, details) => {
+    try {
+      await supabase.from('activity_log').insert({
+        actor_id: auth?.id || 'unknown',
+        actor_name: auth?.name || 'unknown',
+        action,
+        entity_type: entityType,
+        entity_label: entityLabel,
+        details: details || null,
+      });
+    } catch {}
+  };
+
   const handleSaveEdit = async () => {
     await supabase.from('relays').update(fromRelay(selectedRelay)).eq('id', selectedRelay.id);
     setRelays(relays.map((r) => r.id === selectedRelay.id ? { ...selectedRelay } : r));
+    logActivity('update', 'relay', `${selectedRelay.name} (${selectedRelay.num})`);
     setIsDirty(false);
     setSelectedRelay(null);
   };
@@ -570,6 +597,7 @@ export default function RelayDashboard() {
       const added = toRelay(data);
       setRelays([...relays, added]);
       setQrPreviewRelay(added);
+      logActivity('create', 'relay', `${added.name} (${added.num})`);
     }
     setIsDirty(false);
     setNewRelay({ stationId: newRelay.stationId, name: '', num: '', stativ: '', lastCheck: '', nextCheck: '', note: '' });
@@ -589,6 +617,7 @@ export default function RelayDashboard() {
     const { error: pwError } = await supabase.rpc('set_station_password', { p_id: newId, p_password: newStation.password });
     if (pwError) { setStationFormError(pwError.message); return; }
     setStations([...stations, row]);
+    logActivity('create', 'station', row.name);
     setIsDirty(false);
     setNewStation({ name: '', username: '', password: '', uchastkaId: '' });
   };
@@ -622,21 +651,26 @@ export default function RelayDashboard() {
       if (pwError) { setStationFormError(pwError.message); return; }
     }
     setStations(stations.map((s) => s.id === oldId ? row : s));
+    logActivity('update', 'station', row.name);
     setIsDirty(false);
     setEditingStation(null);
   };
 
   const handleDeleteRelay = async (id) => {
+    const relay = relays.find((r) => r.id === id);
     await supabase.from('relays').delete().eq('id', id);
     setRelays(relays.filter((r) => r.id !== id));
+    if (relay) logActivity('delete', 'relay', `${relay.name} (${relay.num})`);
   };
 
   const handleDeleteStation = async () => {
     if (!deleteStationId) return;
+    const station = stations.find((s) => s.id === deleteStationId);
     await supabase.from('relays').delete().eq('station_id', deleteStationId);
     await supabase.from('stations').delete().eq('id', deleteStationId);
     setStations(stations.filter((s) => s.id !== deleteStationId));
     setRelays(relays.filter((r) => r.stationId !== deleteStationId));
+    if (station) logActivity('delete', 'station', station.name);
     setDeleteStationId(null);
   };
 
@@ -652,6 +686,7 @@ export default function RelayDashboard() {
     const { error } = await supabase.from('uchastkalar').insert(row);
     if (error) { setUchastkaFormError(error.message); return; }
     setUchastkalar([...uchastkalar, row]);
+    logActivity('create', 'uchastka', row.name);
     setIsDirty(false);
     setNewUchastka({ name: '' });
   };
@@ -662,16 +697,19 @@ export default function RelayDashboard() {
     const { error } = await supabase.from('uchastkalar').update(row).eq('id', row.id);
     if (error) return;
     setUchastkalar(uchastkalar.map((u) => u.id === row.id ? row : u));
+    logActivity('update', 'uchastka', row.name);
     setIsDirty(false);
     setEditingUchastka(null);
   };
 
   const handleDeleteUchastka = async () => {
     if (!deleteUchastkaId) return;
+    const uchastka = uchastkalar.find((u) => u.id === deleteUchastkaId);
     await supabase.from('stations').update({ uchastka_id: null }).eq('uchastka_id', deleteUchastkaId);
     await supabase.from('uchastkalar').delete().eq('id', deleteUchastkaId);
     setStations(stations.map((s) => s.uchastka_id === deleteUchastkaId ? { ...s, uchastka_id: null } : s));
     setUchastkalar(uchastkalar.filter((u) => u.id !== deleteUchastkaId));
+    if (uchastka) logActivity('delete', 'uchastka', uchastka.name);
     setDeleteUchastkaId(null);
   };
 
@@ -691,6 +729,7 @@ export default function RelayDashboard() {
       if (pwError) { setMexanikFormError(pwError.message); return; }
     }
     setMexaniklar([...mexaniklar, row]);
+    logActivity('create', 'mexanik', row.name);
     setIsDirty(false);
     setNewMexanik({ name: '', username: '', password: '' });
   };
@@ -705,14 +744,17 @@ export default function RelayDashboard() {
       if (pwError) return;
     }
     setMexaniklar(mexaniklar.map((m) => m.id === row.id ? row : m));
+    logActivity('update', 'mexanik', row.name);
     setIsDirty(false);
     setEditingMexanik(null);
   };
 
   const handleDeleteMexanik = async () => {
     if (!deleteMexanikId) return;
+    const mexanik = mexaniklar.find((m) => m.id === deleteMexanikId);
     await supabase.from('mexaniklar').delete().eq('id', deleteMexanikId);
     setMexaniklar(mexaniklar.filter((m) => m.id !== deleteMexanikId));
+    if (mexanik) logActivity('delete', 'mexanik', mexanik.name);
     setDeleteMexanikId(null);
   };
 
@@ -2023,6 +2065,50 @@ export default function RelayDashboard() {
                   {t('common.cancel')}
                 </button>
               </div>
+            </div>
+          )}
+
+          {activeNav === 'activity-log' && auth?.id === 'admin' && (
+            <div className="space-y-4 animate-fade-in">
+              <div>
+                <h2 className="text-2xl font-black text-white">{t('nav.activityLog')}</h2>
+                <p className="text-sm text-white/40 mt-1">{t('activityLog.subtitle')}</p>
+              </div>
+              {activityLogLoading ? (
+                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
+                  <div className="h-8 w-8 mx-auto rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
+                </div>
+              ) : activityLog.length === 0 ? (
+                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
+                  <p className="text-sm text-white/40">{t('activityLog.empty')}</p>
+                </div>
+              ) : (
+                <div className="glass rounded-2xl overflow-hidden animate-slide-up divide-y divide-white/5">
+                  {activityLog.map((entry) => {
+                    const actionColor = entry.action === 'create'
+                      ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+                      : entry.action === 'delete'
+                        ? 'text-red-400 bg-red-500/10 border-red-500/30'
+                        : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+                    return (
+                      <div key={entry.id} className="flex items-center gap-3 px-4 py-3">
+                        <span className={`flex-shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${actionColor}`}>
+                          {t(`activityLog.action.${entry.action}`)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-white truncate">
+                            <span className="font-semibold">{entry.actor_name}</span>
+                            {' — '}{t(`activityLog.entity.${entry.entity_type}`)}: {entry.entity_label}
+                          </p>
+                        </div>
+                        <p className="text-xs text-white/40 flex-shrink-0">
+                          {new Date(entry.created_at).toLocaleString(lang === 'uz' ? 'uz-UZ' : lang === 'ru' ? 'ru-RU' : 'en-US')}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
