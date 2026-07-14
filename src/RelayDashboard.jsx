@@ -22,6 +22,10 @@ async function registerPdfFont(doc) {
   doc.setFont('Roboto', 'normal');
 }
 
+function normalizeRelayName(name) {
+  return (name || '').trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
 function getRelayStatusFromDate(dateString) {
   if (!dateString) return 'green';
   const now = new Date();
@@ -428,7 +432,7 @@ export default function RelayDashboard() {
   };
   const viewStationNameCounts = Object.values(
     viewStationRelays.reduce((acc, r) => {
-      const key = r.name || '—';
+      const key = normalizeRelayName(r.name) || '—';
       acc[key] = acc[key] || { name: key, count: 0 };
       acc[key].count += 1;
       return acc;
