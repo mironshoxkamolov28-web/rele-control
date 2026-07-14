@@ -245,6 +245,9 @@ export default function RelayDashboard() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [mexanikSearch, setMexanikSearch] = useState('');
+  const [uchastkaSearch, setUchastkaSearch] = useState('');
+  const [monthlyPlanSearch, setMonthlyPlanSearch] = useState('');
   const [selectedRelay, setSelectedRelay] = useState(null);
   const [relayPage, setRelayPage] = useState(1);
   const [relayPageSize, setRelayPageSize] = useState(20);
@@ -291,6 +294,7 @@ export default function RelayDashboard() {
   const [viewStation, setViewStation] = useState(null);
   const [viewMexanik, setViewMexanik] = useState(null);
   const [viewMexanikMonth, setViewMexanikMonth] = useState(null);
+  const [isDirty, setIsDirty] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [publicUrl, setPublicUrl] = useState(() => {
     try { return localStorage.getItem('rc_public_url') || ''; } catch { return ''; }
@@ -356,6 +360,15 @@ export default function RelayDashboard() {
   const cycleLang = () => setLang((cur) => LANGS[(LANGS.indexOf(cur) + 1) % LANGS.length]);
 
   useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
+  const confirmDiscard = () => !isDirty || window.confirm(t('common.unsavedChangesConfirm'));
+
+  useEffect(() => {
     setRelayPage(1);
   }, [searchQuery, filterStatus, adminFilterStation, relayPageSize]);
 
@@ -410,6 +423,18 @@ export default function RelayDashboard() {
         .filter((r) => r.status === 'yellow')
         .sort((a, b) => new Date(a.nextCheck) - new Date(b.nextCheck)),
     }))
+    .filter((g) => g.relays.length > 0);
+
+  const visibleMexaniklar = mexaniklar.filter((m) => m.name.toLowerCase().includes(mexanikSearch.toLowerCase()));
+  const visibleUchastkalar = uchastkalar.filter((u) => u.name.toLowerCase().includes(uchastkaSearch.toLowerCase()));
+  const visibleMonthlyPlan = monthlyPlanByStation
+    .map((g) => {
+      const q = monthlyPlanSearch.trim().toLowerCase();
+      if (!q) return g;
+      const stationMatches = g.station.name.toLowerCase().includes(q);
+      const relays = stationMatches ? g.relays : g.relays.filter((r) => r.name.toLowerCase().includes(q) || r.num.includes(monthlyPlanSearch));
+      return { ...g, relays };
+    })
     .filter((g) => g.relays.length > 0);
 
   const getStationName = (id) => stations.find((s) => s.id === id)?.name || id;
@@ -526,6 +551,7 @@ export default function RelayDashboard() {
     setViewStation(null);
     setViewMexanik(null);
     setViewMexanikMonth(null);
+    setIsDirty(false);
     setLoginPassword('');
     setLoginUsername('');
     setLoginError('');
@@ -534,6 +560,7 @@ export default function RelayDashboard() {
   const handleSaveEdit = async () => {
     await supabase.from('relays').update(fromRelay(selectedRelay)).eq('id', selectedRelay.id);
     setRelays(relays.map((r) => r.id === selectedRelay.id ? { ...selectedRelay } : r));
+    setIsDirty(false);
     setSelectedRelay(null);
   };
 
@@ -544,6 +571,7 @@ export default function RelayDashboard() {
       setRelays([...relays, added]);
       setQrPreviewRelay(added);
     }
+    setIsDirty(false);
     setNewRelay({ stationId: newRelay.stationId, name: '', num: '', stativ: '', lastCheck: '', nextCheck: '', note: '' });
   };
 
@@ -561,6 +589,7 @@ export default function RelayDashboard() {
     const { error: pwError } = await supabase.rpc('set_station_password', { p_id: newId, p_password: newStation.password });
     if (pwError) { setStationFormError(pwError.message); return; }
     setStations([...stations, row]);
+    setIsDirty(false);
     setNewStation({ name: '', username: '', password: '', uchastkaId: '' });
   };
 
@@ -593,6 +622,7 @@ export default function RelayDashboard() {
       if (pwError) { setStationFormError(pwError.message); return; }
     }
     setStations(stations.map((s) => s.id === oldId ? row : s));
+    setIsDirty(false);
     setEditingStation(null);
   };
 
@@ -622,6 +652,7 @@ export default function RelayDashboard() {
     const { error } = await supabase.from('uchastkalar').insert(row);
     if (error) { setUchastkaFormError(error.message); return; }
     setUchastkalar([...uchastkalar, row]);
+    setIsDirty(false);
     setNewUchastka({ name: '' });
   };
 
@@ -631,6 +662,7 @@ export default function RelayDashboard() {
     const { error } = await supabase.from('uchastkalar').update(row).eq('id', row.id);
     if (error) return;
     setUchastkalar(uchastkalar.map((u) => u.id === row.id ? row : u));
+    setIsDirty(false);
     setEditingUchastka(null);
   };
 
@@ -659,6 +691,7 @@ export default function RelayDashboard() {
       if (pwError) { setMexanikFormError(pwError.message); return; }
     }
     setMexaniklar([...mexaniklar, row]);
+    setIsDirty(false);
     setNewMexanik({ name: '', username: '', password: '' });
   };
 
@@ -672,6 +705,7 @@ export default function RelayDashboard() {
       if (pwError) return;
     }
     setMexaniklar(mexaniklar.map((m) => m.id === row.id ? row : m));
+    setIsDirty(false);
     setEditingMexanik(null);
   };
 
@@ -1037,7 +1071,7 @@ export default function RelayDashboard() {
               const isExpanded = item.children && (activeNav === item.id || item.children.some((c) => c.id === activeNav));
               return (
                 <div key={item.id}>
-                  <button onClick={() => { setActiveNav(item.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); setViewMexanikMonth(null); }}
+                  <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setActiveNav(item.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); setViewMexanikMonth(null); }}
                     className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
                       activeNav === item.id
                         ? 'bg-amber-500/15 text-amber-400 shadow-sm'
@@ -1056,7 +1090,7 @@ export default function RelayDashboard() {
                   {isExpanded && item.children && auth?.id === 'admin' && (
                     <div className="ml-3 mt-1 space-y-0.5 border-l border-white/5 pl-2">
                       {item.children.map((child) => (
-                        <button key={child.id} onClick={() => { setActiveNav(child.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); setViewMexanikMonth(null); }}
+                        <button key={child.id} onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setActiveNav(child.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); setViewMexanikMonth(null); }}
                           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
                             activeNav === child.id
                               ? 'bg-amber-500/10 text-amber-400'
@@ -1085,7 +1119,7 @@ export default function RelayDashboard() {
               <ThemeToggle theme={theme} onToggle={toggleTheme} t={t} className="h-8 w-8 flex-shrink-0" />
             </div>
 
-            <button onClick={handleLogout}
+            <button onClick={() => { if (confirmDiscard()) handleLogout(); }}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/5 px-4 py-2.5 text-xs font-semibold text-white/50 transition hover:bg-red-500/10 hover:text-red-400">
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -1171,7 +1205,7 @@ export default function RelayDashboard() {
                             {auth?.id === 'admin' && (
                               <td className="px-4 py-3">
                                 <div className="flex items-center justify-end gap-2">
-                                  <button onClick={() => setSelectedRelay({ ...relay })}
+                                  <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
                                     className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                                     {t('common.edit')}
                                   </button>
@@ -1220,7 +1254,7 @@ export default function RelayDashboard() {
                         </div>
                         {auth?.id === 'admin' && (
                           <div className="mt-4 flex gap-2 pt-4 border-t border-white/5">
-                            <button onClick={() => setSelectedRelay({ ...relay })}
+                            <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
                               className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                               {t('common.edit')}
                             </button>
@@ -1354,7 +1388,7 @@ export default function RelayDashboard() {
                         <p className="text-xs text-white/40">{t('station.loginLabel')} <span className="font-mono text-white/50">{s.username}</span> &middot; {t('common.relayCountShort', count)} &middot; {t('station.uchastkaLabel')} {getUchastkaName(s.uchastka_id)}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => setEditingStation({ _originalId: s.id, name: s.name, username: s.username, password: '', uchastka_id: s.uchastka_id || '' })}
+                        <button onClick={() => { setIsDirty(false); setEditingStation({ _originalId: s.id, name: s.name, username: s.username, password: '', uchastka_id: s.uchastka_id || '' }); }}
                           className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                           {t('common.edit')}
                         </button>
@@ -1445,7 +1479,7 @@ export default function RelayDashboard() {
                           {auth?.id === 'admin' && (
                             <td className="px-4 py-3">
                               <div className="flex items-center justify-end gap-2">
-                                <button onClick={() => setSelectedRelay({ ...relay })}
+                                <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
                                   className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                                   {t('common.edit')}
                                 </button>
@@ -1516,7 +1550,7 @@ export default function RelayDashboard() {
                         {auth?.id === 'admin' && (
                           <div className="mt-4 flex items-center justify-between pt-4 border-t border-white/5">
                             <div className="flex gap-2">
-                              <button onClick={() => setSelectedRelay({ ...relay })}
+                              <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
                                 className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                                 {t('common.edit')}
                               </button>
@@ -1578,7 +1612,7 @@ export default function RelayDashboard() {
           )}
 
           {activeNav === 'add-relay' && auth?.id === 'admin' && (
-            <div className="glass rounded-2xl p-6 animate-slide-up max-w-3xl">
+            <div className="glass rounded-2xl p-6 animate-slide-up max-w-3xl" onInput={() => setIsDirty(true)}>
               <h2 className="text-lg font-bold text-white">{t('addRelay.title')}</h2>
               <p className="text-sm text-white/40 mb-5">{t('addRelay.subtitle')}</p>
               <div className="grid gap-4 md:grid-cols-2">
@@ -1617,14 +1651,14 @@ export default function RelayDashboard() {
               </div>
               <div className="mt-4 space-y-1.5">
                 <label className="text-xs font-medium text-white/60">{t('field.checkedBy')}</label>
-                <MechanicSelect mexaniklar={mexaniklar} value={newRelay.note} onChange={(v) => setNewRelay({ ...newRelay, note: v })} t={t} />
+                <MechanicSelect mexaniklar={mexaniklar} value={newRelay.note} onChange={(v) => { setNewRelay({ ...newRelay, note: v }); setIsDirty(true); }} t={t} />
               </div>
               <div className="mt-5 flex gap-3">
                 <button onClick={handleAddRelay}
                   className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
                   {t('addRelay.submit')}
                 </button>
-                <button onClick={() => setActiveNav('relays')}
+                <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setActiveNav('relays'); }}
                   className="rounded-xl bg-white/10 px-6 py-3 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
                   {t('common.cancel')}
                 </button>
@@ -1653,7 +1687,19 @@ export default function RelayDashboard() {
                   <p className="text-lg font-semibold text-white/60">{t('monthlyPlan.empty')}</p>
                 </div>
               ) : (
-                monthlyPlanByStation.map((group) => (
+                <>
+                  <div className="relative">
+                    <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <input type="text" value={monthlyPlanSearch} placeholder={t('common.searchPlaceholder')}
+                      onChange={(e) => setMonthlyPlanSearch(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10" />
+                  </div>
+                  {visibleMonthlyPlan.length === 0 ? (
+                    <div className="glass rounded-2xl p-12 text-center animate-fade-in">
+                      <p className="text-sm text-white/40">{t('common.noSearchResults')}</p>
+                    </div>
+                  ) : (
+                visibleMonthlyPlan.map((group) => (
                   <div key={group.station.id} className="glass rounded-2xl p-5 animate-slide-up">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-bold text-white/80">{group.station.name}</h3>
@@ -1675,12 +1721,14 @@ export default function RelayDashboard() {
                     </div>
                   </div>
                 ))
+                  )}
+                </>
               )}
             </div>
           )}
 
           {activeNav === 'add-station' && auth?.id === 'admin' && (
-            <div className="glass rounded-2xl p-6 animate-slide-up max-w-2xl">
+            <div className="glass rounded-2xl p-6 animate-slide-up max-w-2xl" onInput={() => setIsDirty(true)}>
               <h2 className="text-lg font-bold text-white">{t('addStation.title')}</h2>
               <p className="text-sm text-white/40 mb-5">{t('addStation.subtitle')}</p>
               <div className="grid gap-4 md:grid-cols-3">
@@ -1716,7 +1764,7 @@ export default function RelayDashboard() {
                   className="rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 px-6 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98]">
                   {t('addStation.submit')}
                 </button>
-                <button onClick={() => { setStationFormError(''); setActiveNav('relays'); }}
+                <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setStationFormError(''); setActiveNav('relays'); }}
                   className="rounded-xl bg-white/10 px-6 py-3 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
                   {t('common.cancel')}
                 </button>
@@ -1737,6 +1785,18 @@ export default function RelayDashboard() {
                 </div>
               ) : (
                 <>
+                  <div className="relative">
+                    <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <input type="text" value={uchastkaSearch} placeholder={t('common.searchPlaceholder')}
+                      onChange={(e) => setUchastkaSearch(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10" />
+                  </div>
+                  {visibleUchastkalar.length === 0 ? (
+                    <div className="glass rounded-2xl p-12 text-center animate-fade-in">
+                      <p className="text-sm text-white/40">{t('common.noSearchResults')}</p>
+                    </div>
+                  ) : (
+                <>
                   <div className="hidden md:block glass rounded-2xl overflow-hidden animate-slide-up">
                     <table className="w-full text-sm">
                       <thead>
@@ -1749,7 +1809,7 @@ export default function RelayDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {uchastkalar.map((u, idx) => {
+                        {visibleUchastkalar.map((u, idx) => {
                           const stationIds = stations.filter((s) => s.uchastka_id === u.id).map((s) => s.id);
                           const relayCount = relays.filter((r) => stationIds.includes(r.stationId)).length;
                           return (
@@ -1760,7 +1820,7 @@ export default function RelayDashboard() {
                               <td className="px-4 py-3 text-white/60">{relayCount}</td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center justify-end gap-2">
-                                  <button onClick={() => setEditingUchastka({ id: u.id, name: u.name })}
+                                  <button onClick={() => { setIsDirty(false); setEditingUchastka({ id: u.id, name: u.name }); }}
                                     className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                                     {t('common.edit')}
                                   </button>
@@ -1778,7 +1838,7 @@ export default function RelayDashboard() {
                   </div>
 
                   <div className="md:hidden space-y-3">
-                    {uchastkalar.map((u) => {
+                    {visibleUchastkalar.map((u) => {
                       const stationIds = stations.filter((s) => s.uchastka_id === u.id).map((s) => s.id);
                       const relayCount = relays.filter((r) => stationIds.includes(r.stationId)).length;
                       return (
@@ -1791,7 +1851,7 @@ export default function RelayDashboard() {
                             <p className="text-xs text-white/40">{t('table.stationCount')}: {stationIds.length} &middot; {t('common.relayCountShort', relayCount)}</p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <button onClick={() => setEditingUchastka({ id: u.id, name: u.name })}
+                            <button onClick={() => { setIsDirty(false); setEditingUchastka({ id: u.id, name: u.name }); }}
                               className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                               {t('common.edit')}
                             </button>
@@ -1805,12 +1865,14 @@ export default function RelayDashboard() {
                     })}
                   </div>
                 </>
+                  )}
+                </>
               )}
             </div>
           )}
 
           {activeNav === 'add-uchastka' && auth?.id === 'admin' && (
-            <div className="glass rounded-2xl p-6 animate-slide-up max-w-md">
+            <div className="glass rounded-2xl p-6 animate-slide-up max-w-md" onInput={() => setIsDirty(true)}>
               <h2 className="text-lg font-bold text-white">{t('addUchastka.title')}</h2>
               <p className="text-sm text-white/40 mb-5">{t('addUchastka.subtitle')}</p>
               <div className="space-y-1.5">
@@ -1826,7 +1888,7 @@ export default function RelayDashboard() {
                   className="rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 px-6 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98]">
                   {t('addUchastka.submit')}
                 </button>
-                <button onClick={() => { setUchastkaFormError(''); setActiveNav('uchastkalar'); }}
+                <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setUchastkaFormError(''); setActiveNav('uchastkalar'); }}
                   className="rounded-xl bg-white/10 px-6 py-3 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
                   {t('common.cancel')}
                 </button>
@@ -1847,6 +1909,18 @@ export default function RelayDashboard() {
                 </div>
               ) : (
                 <>
+                  <div className="relative">
+                    <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <input type="text" value={mexanikSearch} placeholder={t('common.searchPlaceholder')}
+                      onChange={(e) => setMexanikSearch(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10" />
+                  </div>
+                  {visibleMexaniklar.length === 0 ? (
+                    <div className="glass rounded-2xl p-12 text-center animate-fade-in">
+                      <p className="text-sm text-white/40">{t('common.noSearchResults')}</p>
+                    </div>
+                  ) : (
+                <>
                   <div className="hidden md:block glass rounded-2xl overflow-hidden animate-slide-up">
                     <table className="w-full text-sm">
                       <thead>
@@ -1857,7 +1931,7 @@ export default function RelayDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {mexaniklar.map((m, idx) => (
+                        {visibleMexaniklar.map((m, idx) => (
                           <tr key={m.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
                             <td className="px-4 py-3 text-white/60">{idx + 1}</td>
                             <td className="px-4 py-3">
@@ -1868,7 +1942,7 @@ export default function RelayDashboard() {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center justify-end gap-2">
-                                <button onClick={() => setEditingMexanik({ id: m.id, name: m.name, username: m.username || '', password: '' })}
+                                <button onClick={() => { setIsDirty(false); setEditingMexanik({ id: m.id, name: m.name, username: m.username || '', password: '' }); }}
                                   className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                                   {t('common.edit')}
                                 </button>
@@ -1885,7 +1959,7 @@ export default function RelayDashboard() {
                   </div>
 
                   <div className="md:hidden space-y-3">
-                    {mexaniklar.map((m) => (
+                    {visibleMexaniklar.map((m) => (
                       <div key={m.id} className="glass rounded-2xl p-4 flex items-center gap-4">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400/20 to-sky-500/20 text-cyan-400 font-bold">
                           {m.name.charAt(0)}
@@ -1897,7 +1971,7 @@ export default function RelayDashboard() {
                           </button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <button onClick={() => setEditingMexanik({ id: m.id, name: m.name, username: m.username || '', password: '' })}
+                          <button onClick={() => { setIsDirty(false); setEditingMexanik({ id: m.id, name: m.name, username: m.username || '', password: '' }); }}
                             className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
                             {t('common.edit')}
                           </button>
@@ -1910,12 +1984,14 @@ export default function RelayDashboard() {
                     ))}
                   </div>
                 </>
+                  )}
+                </>
               )}
             </div>
           )}
 
           {activeNav === 'add-mexanik' && auth?.id === 'admin' && (
-            <div className="glass rounded-2xl p-6 animate-slide-up max-w-md">
+            <div className="glass rounded-2xl p-6 animate-slide-up max-w-md" onInput={() => setIsDirty(true)}>
               <h2 className="text-lg font-bold text-white">{t('addMexanik.title')}</h2>
               <p className="text-sm text-white/40 mb-5">{t('addMexanik.subtitle')}</p>
               <div className="space-y-1.5">
@@ -1942,7 +2018,7 @@ export default function RelayDashboard() {
                   className="rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 px-6 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98]">
                   {t('addMexanik.submit')}
                 </button>
-                <button onClick={() => { setMexanikFormError(''); setActiveNav('mexaniklar'); }}
+                <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setMexanikFormError(''); setActiveNav('mexaniklar'); }}
                   className="rounded-xl bg-white/10 px-6 py-3 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
                   {t('common.cancel')}
                 </button>
@@ -2014,8 +2090,8 @@ export default function RelayDashboard() {
         </main>
       </div>
 
-      <Modal isOpen={!!selectedRelay} onClose={() => setSelectedRelay(null)}>
-        <div className="glass rounded-2xl p-6">
+      <Modal isOpen={!!selectedRelay} onClose={() => { if (confirmDiscard()) { setIsDirty(false); setSelectedRelay(null); } }}>
+        <div className="glass rounded-2xl p-6" onInput={() => setIsDirty(true)}>
           <h2 className="text-lg font-bold text-white mb-1">{t('editRelay.title')}</h2>
           <p className="text-sm text-white/40 mb-5">{selectedRelay?.name}</p>
           <div className="grid gap-4 md:grid-cols-2">
@@ -2065,14 +2141,14 @@ export default function RelayDashboard() {
           <div className="mt-4 space-y-1.5">
             <label className="text-xs font-medium text-white/60">{t('field.checkedBy')}</label>
             <MechanicSelect mexaniklar={mexaniklar} value={selectedRelay?.note || ''}
-              onChange={(v) => setSelectedRelay({ ...selectedRelay, note: v })} t={t} />
+              onChange={(v) => { setSelectedRelay({ ...selectedRelay, note: v }); setIsDirty(true); }} t={t} />
           </div>
           <div className="mt-5 flex gap-3">
             <button onClick={handleSaveEdit}
               className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
               {t('common.save')}
             </button>
-            <button onClick={() => setSelectedRelay(null)}
+            <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setSelectedRelay(null); }}
               className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
               {t('common.cancel')}
             </button>
@@ -2080,8 +2156,8 @@ export default function RelayDashboard() {
         </div>
       </Modal>
 
-      <Modal isOpen={!!editingStation} onClose={() => setEditingStation(null)}>
-        <div className="glass rounded-2xl p-6">
+      <Modal isOpen={!!editingStation} onClose={() => { if (confirmDiscard()) { setIsDirty(false); setEditingStation(null); } }}>
+        <div className="glass rounded-2xl p-6" onInput={() => setIsDirty(true)}>
           <h2 className="text-lg font-bold text-white mb-1">{t('editStation.title')}</h2>
           <p className="text-sm text-white/40 mb-5">{editingStation?.name}</p>
           <div className="space-y-4">
@@ -2120,7 +2196,7 @@ export default function RelayDashboard() {
               className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
               {t('common.save')}
             </button>
-            <button onClick={() => { setStationFormError(''); setEditingStation(null); }}
+            <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setStationFormError(''); setEditingStation(null); }}
               className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
               {t('common.cancel')}
             </button>
@@ -2165,8 +2241,8 @@ export default function RelayDashboard() {
         t={t}
       />
 
-      <Modal isOpen={!!editingUchastka} onClose={() => setEditingUchastka(null)}>
-        <div className="glass rounded-2xl p-6">
+      <Modal isOpen={!!editingUchastka} onClose={() => { if (confirmDiscard()) { setIsDirty(false); setEditingUchastka(null); } }}>
+        <div className="glass rounded-2xl p-6" onInput={() => setIsDirty(true)}>
           <h2 className="text-lg font-bold text-white mb-1">{t('editUchastka.title')}</h2>
           <div className="space-y-1.5 mt-4">
             <label className="text-xs font-medium text-white/60">{t('field.uchastkaName')}</label>
@@ -2178,7 +2254,7 @@ export default function RelayDashboard() {
               className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
               {t('common.save')}
             </button>
-            <button onClick={() => setEditingUchastka(null)}
+            <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setEditingUchastka(null); }}
               className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
               {t('common.cancel')}
             </button>
@@ -2195,8 +2271,8 @@ export default function RelayDashboard() {
         t={t}
       />
 
-      <Modal isOpen={!!editingMexanik} onClose={() => setEditingMexanik(null)}>
-        <div className="glass rounded-2xl p-6">
+      <Modal isOpen={!!editingMexanik} onClose={() => { if (confirmDiscard()) { setIsDirty(false); setEditingMexanik(null); } }}>
+        <div className="glass rounded-2xl p-6" onInput={() => setIsDirty(true)}>
           <h2 className="text-lg font-bold text-white mb-1">{t('editMexanik.title')}</h2>
           <div className="space-y-1.5 mt-4">
             <label className="text-xs font-medium text-white/60">{t('field.mechanicName')}</label>
@@ -2221,7 +2297,7 @@ export default function RelayDashboard() {
               className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
               {t('common.save')}
             </button>
-            <button onClick={() => setEditingMexanik(null)}
+            <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setEditingMexanik(null); }}
               className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
               {t('common.cancel')}
             </button>
