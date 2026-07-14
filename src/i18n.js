@@ -54,6 +54,12 @@ export const translations = {
     'globalSearch.hint': "Qidirish uchun yozishni boshlang",
     'globalSearch.noResults': "Hech narsa topilmadi",
 
+    'bulkEdit.selectedCount': (n) => `${n} ta rele tanlandi`,
+    'bulkEdit.editButton': "Birga tahrirlash",
+    'bulkEdit.title': "Relelarni birga tahrirlash",
+    'bulkEdit.applyButton': "Qo'llash",
+    'bulkEdit.logLabel': (n) => `${n} ta rele (ommaviy tahrirlash)`,
+
     'status.red': "Muddati o'tgan",
     'status.yellow': "Muddati yaqin",
     'status.green': "Muddati bor",
@@ -268,6 +274,12 @@ export const translations = {
     'globalSearch.hint': "Начните вводить для поиска",
     'globalSearch.noResults': "Ничего не найдено",
 
+    'bulkEdit.selectedCount': (n) => `Выбрано реле: ${n}`,
+    'bulkEdit.editButton': "Редактировать вместе",
+    'bulkEdit.title': "Массовое редактирование реле",
+    'bulkEdit.applyButton': "Применить",
+    'bulkEdit.logLabel': (n) => `${n} реле (массовое редактирование)`,
+
     'status.red': "Просрочено",
     'status.yellow': "Срок скоро истекает",
     'status.green': "Срок в норме",
@@ -481,6 +493,12 @@ export const translations = {
     'globalSearch.placeholder': "Search relays, stations, sectors, or mechanics...",
     'globalSearch.hint': "Start typing to search",
     'globalSearch.noResults': "No results found",
+
+    'bulkEdit.selectedCount': (n) => `${n} relay(s) selected`,
+    'bulkEdit.editButton': "Edit together",
+    'bulkEdit.title': "Bulk edit relays",
+    'bulkEdit.applyButton': "Apply",
+    'bulkEdit.logLabel': (n) => `${n} relays (bulk edit)`,
 
     'status.red': "Overdue",
     'status.yellow': "Due soon",

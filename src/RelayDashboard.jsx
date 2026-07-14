@@ -252,6 +252,15 @@ export default function RelayDashboard() {
   const [selectedRelay, setSelectedRelay] = useState(null);
   const [relayPage, setRelayPage] = useState(1);
   const [relayPageSize, setRelayPageSize] = useState(20);
+  const [selectedRelayIds, setSelectedRelayIds] = useState([]);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkEdit, setBulkEdit] = useState({
+    applyStation: false, stationId: '',
+    applyNextCheck: false, nextCheck: '',
+    applyLastCheck: false, lastCheck: '',
+    applyStativ: false, stativ: '',
+    applyNote: false, note: '',
+  });
   const [auth, setAuth] = useState(() => {
     try {
       const saved = localStorage.getItem('rc_auth');
@@ -397,6 +406,7 @@ export default function RelayDashboard() {
 
   useEffect(() => {
     setRelayPage(1);
+    setSelectedRelayIds([]);
   }, [searchQuery, filterStatus, adminFilterStation, relayPageSize]);
 
   useEffect(() => {
@@ -677,6 +687,45 @@ export default function RelayDashboard() {
     logActivity('update', 'relay', `${selectedRelay.name} (${selectedRelay.num})`);
     setIsDirty(false);
     setSelectedRelay(null);
+  };
+
+  const handleSaveBulkEdit = async () => {
+    const dbUpdates = {};
+    const localUpdates = {};
+    if (bulkEdit.applyStation && bulkEdit.stationId) {
+      dbUpdates.station_id = bulkEdit.stationId;
+      localUpdates.stationId = bulkEdit.stationId;
+    }
+    if (bulkEdit.applyNextCheck && bulkEdit.nextCheck) {
+      dbUpdates.next_check = bulkEdit.nextCheck;
+      localUpdates.nextCheck = bulkEdit.nextCheck;
+    }
+    if (bulkEdit.applyLastCheck && bulkEdit.lastCheck) {
+      dbUpdates.last_check = bulkEdit.lastCheck;
+      localUpdates.lastCheck = bulkEdit.lastCheck;
+    }
+    if (bulkEdit.applyStativ && bulkEdit.stativ.trim()) {
+      dbUpdates.stativ = bulkEdit.stativ.trim();
+      localUpdates.stativ = bulkEdit.stativ.trim();
+    }
+    if (bulkEdit.applyNote) {
+      dbUpdates.note = bulkEdit.note || null;
+      localUpdates.note = bulkEdit.note;
+    }
+    if (Object.keys(dbUpdates).length === 0) return;
+    const ids = selectedRelayIds;
+    await supabase.from('relays').update(dbUpdates).in('id', ids);
+    setRelays((cur) => cur.map((r) => ids.includes(r.id) ? { ...r, ...localUpdates } : r));
+    logActivity('update', 'relay', t('bulkEdit.logLabel', ids.length));
+    setBulkEditOpen(false);
+    setSelectedRelayIds([]);
+    setBulkEdit({
+      applyStation: false, stationId: '',
+      applyNextCheck: false, nextCheck: '',
+      applyLastCheck: false, lastCheck: '',
+      applyStativ: false, stativ: '',
+      applyNote: false, note: '',
+    });
   };
 
   const handleAddRelay = async () => {
@@ -1626,10 +1675,39 @@ export default function RelayDashboard() {
                 </div>
               </div>
 
+              {auth?.id === 'admin' && selectedRelayIds.length > 0 && (
+                <div className="glass rounded-2xl p-4 flex items-center justify-between gap-3 animate-fade-in">
+                  <p className="text-sm text-white/70">{t('bulkEdit.selectedCount', selectedRelayIds.length)}</p>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setBulkEditOpen(true)}
+                      className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-xs font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25">
+                      {t('bulkEdit.editButton')}
+                    </button>
+                    <button onClick={() => setSelectedRelayIds([])}
+                      className="rounded-xl bg-white/10 px-4 py-2 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="hidden md:block glass rounded-2xl overflow-hidden animate-slide-up">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/10 text-left text-xs font-medium text-white/40 uppercase tracking-wider">
+                      {auth?.id === 'admin' && (
+                        <th className="px-4 py-3 font-medium w-8">
+                          <input type="checkbox"
+                            checked={pagedRelays.length > 0 && pagedRelays.every((r) => selectedRelayIds.includes(r.id))}
+                            onChange={(e) => {
+                              const pageIds = pagedRelays.map((r) => r.id);
+                              setSelectedRelayIds((cur) => e.target.checked
+                                ? Array.from(new Set([...cur, ...pageIds]))
+                                : cur.filter((id) => !pageIds.includes(id)));
+                            }}
+                            className="rounded border-white/20 bg-white/5" />
+                        </th>
+                      )}
                       <th className="px-4 py-3 font-medium">{t('table.status')}</th>
                       <th className="px-4 py-3 font-medium">{t('table.name')}</th>
                       <th className="px-4 py-3 font-medium">{t('common.station')}</th>
@@ -1644,6 +1722,15 @@ export default function RelayDashboard() {
                       const sc = statusConfig[relay.status];
                       return (
                         <tr key={relay.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
+                          {auth?.id === 'admin' && (
+                            <td className="px-4 py-3">
+                              <input type="checkbox" checked={selectedRelayIds.includes(relay.id)}
+                                onChange={(e) => setSelectedRelayIds((cur) => e.target.checked
+                                  ? [...cur, relay.id]
+                                  : cur.filter((id) => id !== relay.id))}
+                                className="rounded border-white/20 bg-white/5" />
+                            </td>
+                          )}
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${sc.lightBg} ${sc.text} ${sc.border} border`}>
                               <span className={`h-1.5 w-1.5 rounded-full ${sc.dot} ${relay.status === 'red' ? 'animate-pulse-soft' : ''}`} />
@@ -2375,6 +2462,86 @@ export default function RelayDashboard() {
               {t('common.save')}
             </button>
             <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setSelectedRelay(null); }}
+              className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={bulkEditOpen} onClose={() => setBulkEditOpen(false)}>
+        <div className="glass rounded-2xl p-6">
+          <h2 className="text-lg font-bold text-white mb-1">{t('bulkEdit.title')}</h2>
+          <p className="text-sm text-white/40 mb-5">{t('bulkEdit.selectedCount', selectedRelayIds.length)}</p>
+
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <input type="checkbox" className="mt-3 rounded border-white/20 bg-white/5" checked={bulkEdit.applyStation}
+                onChange={(e) => setBulkEdit({ ...bulkEdit, applyStation: e.target.checked })} />
+              <div className="flex-1 space-y-1.5">
+                <label className="text-xs font-medium text-white/60">{t('common.station')}</label>
+                <select value={bulkEdit.stationId} disabled={!bulkEdit.applyStation}
+                  onChange={(e) => setBulkEdit({ ...bulkEdit, stationId: e.target.value })}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 disabled:opacity-40">
+                  <option value="" className="bg-neutral-900 text-white"></option>
+                  {stations.filter((s) => s.id !== 'admin').map((s) => <option key={s.id} value={s.id} className="bg-neutral-900 text-white">{s.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <input type="checkbox" className="mt-3 rounded border-white/20 bg-white/5" checked={bulkEdit.applyLastCheck}
+                onChange={(e) => setBulkEdit({ ...bulkEdit, applyLastCheck: e.target.checked })} />
+              <div className="flex-1 space-y-1.5">
+                <label className="text-xs font-medium text-white/60">{t('field.lastCheck')}</label>
+                <input type="date" value={bulkEdit.lastCheck} disabled={!bulkEdit.applyLastCheck}
+                  onChange={(e) => setBulkEdit({ ...bulkEdit, lastCheck: e.target.value })}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 disabled:opacity-40" />
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <input type="checkbox" className="mt-3 rounded border-white/20 bg-white/5" checked={bulkEdit.applyNextCheck}
+                onChange={(e) => setBulkEdit({ ...bulkEdit, applyNextCheck: e.target.checked })} />
+              <div className="flex-1 space-y-1.5">
+                <label className="text-xs font-medium text-white/60">{t('field.nextCheck')}</label>
+                <input type="date" value={bulkEdit.nextCheck} disabled={!bulkEdit.applyNextCheck}
+                  onChange={(e) => setBulkEdit({ ...bulkEdit, nextCheck: e.target.value })}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 disabled:opacity-40" />
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <input type="checkbox" className="mt-3 rounded border-white/20 bg-white/5" checked={bulkEdit.applyStativ}
+                onChange={(e) => setBulkEdit({ ...bulkEdit, applyStativ: e.target.checked })} />
+              <div className="flex-1 space-y-1.5">
+                <label className="text-xs font-medium text-white/60">{t('field.stativNum')}</label>
+                <input value={bulkEdit.stativ} disabled={!bulkEdit.applyStativ}
+                  onChange={(e) => setBulkEdit({ ...bulkEdit, stativ: e.target.value })}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 disabled:opacity-40" />
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <input type="checkbox" className="mt-3 rounded border-white/20 bg-white/5" checked={bulkEdit.applyNote}
+                onChange={(e) => setBulkEdit({ ...bulkEdit, applyNote: e.target.checked })} />
+              <div className="flex-1 space-y-1.5">
+                <label className="text-xs font-medium text-white/60">{t('field.checkedBy')}</label>
+                <fieldset disabled={!bulkEdit.applyNote} className="disabled:opacity-40">
+                  <MechanicSelect mexaniklar={mexaniklar} value={bulkEdit.note}
+                    onChange={(v) => setBulkEdit({ ...bulkEdit, note: v })} t={t} />
+                </fieldset>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 flex gap-3">
+            <button onClick={handleSaveBulkEdit}
+              disabled={!bulkEdit.applyStation && !bulkEdit.applyNextCheck && !bulkEdit.applyLastCheck && !bulkEdit.applyStativ && !bulkEdit.applyNote}
+              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed">
+              {t('bulkEdit.applyButton')}
+            </button>
+            <button onClick={() => setBulkEditOpen(false)}
               className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
               {t('common.cancel')}
             </button>
