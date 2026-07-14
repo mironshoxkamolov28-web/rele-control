@@ -49,6 +49,11 @@ export const translations = {
     'toast.deleted': (label) => `${label} o'chirildi`,
     'common.undo': "Qaytarish",
 
+    'globalSearch.trigger': "Qidirish...",
+    'globalSearch.placeholder': "Rele, stansiya, uchastka yoki mexanik qidirish...",
+    'globalSearch.hint': "Qidirish uchun yozishni boshlang",
+    'globalSearch.noResults': "Hech narsa topilmadi",
+
     'status.red': "Muddati o'tgan",
     'status.yellow': "Muddati yaqin",
     'status.green': "Muddati bor",
@@ -258,6 +263,11 @@ export const translations = {
     'toast.deleted': (label) => `${label} удалено`,
     'common.undo': "Отменить",
 
+    'globalSearch.trigger': "Поиск...",
+    'globalSearch.placeholder': "Поиск реле, станции, участка или механика...",
+    'globalSearch.hint': "Начните вводить для поиска",
+    'globalSearch.noResults': "Ничего не найдено",
+
     'status.red': "Просрочено",
     'status.yellow': "Срок скоро истекает",
     'status.green': "Срок в норме",
@@ -466,6 +476,11 @@ export const translations = {
 
     'toast.deleted': (label) => `${label} deleted`,
     'common.undo': "Undo",
+
+    'globalSearch.trigger': "Search...",
+    'globalSearch.placeholder': "Search relays, stations, sectors, or mechanics...",
+    'globalSearch.hint': "Start typing to search",
+    'globalSearch.noResults': "No results found",
 
     'status.red': "Overdue",
     'status.yellow': "Due soon",
