@@ -414,7 +414,7 @@ export default function RelayDashboard() {
       supabase.from('stations').select('id,name,username,uchastka_id'),
       supabase.from('relays').select('*'),
       supabase.from('uchastkalar').select('*'),
-      supabase.from('mexaniklar').select('*'),
+      supabase.from('mexaniklar').select('id,name,username'),
     ]).then(([{ data: stationsData }, { data: relaysData }, { data: uchastkalarData }, { data: mexaniklarData }]) => {
       if (stationsData) {
         setStations(stationsData);
