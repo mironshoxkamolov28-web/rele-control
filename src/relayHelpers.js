@@ -96,6 +96,32 @@ export function downloadTextFile(filename, content, mime = 'text/csv;charset=utf
   URL.revokeObjectURL(url);
 }
 
+export const RELAY_DIFF_FIELDS = [
+  { key: 'name', labelKey: 'field.name' },
+  { key: 'num', labelKey: 'field.factoryNum' },
+  { key: 'stationId', labelKey: 'common.station' },
+  { key: 'stativ', labelKey: 'field.stativNum' },
+  { key: 'lastCheck', labelKey: 'field.lastCheck' },
+  { key: 'nextCheck', labelKey: 'field.nextCheck' },
+  { key: 'note', labelKey: 'field.checkedBy' },
+];
+
+export function buildRelayDiff(before, after, getStationName) {
+  const changes = [];
+  for (const f of RELAY_DIFF_FIELDS) {
+    const rawBefore = before?.[f.key] ?? '';
+    const rawAfter = after?.[f.key] ?? '';
+    if (rawBefore === rawAfter) continue;
+    const isStation = f.key === 'stationId' && getStationName;
+    changes.push({
+      field: f.key,
+      before: isStation ? getStationName(rawBefore) : rawBefore,
+      after: isStation ? getStationName(rawAfter) : rawAfter,
+    });
+  }
+  return changes;
+}
+
 export const CSV_FIELD_I18N_KEYS = {
   'field.name': 'name',
   'field.factoryNum': 'num',

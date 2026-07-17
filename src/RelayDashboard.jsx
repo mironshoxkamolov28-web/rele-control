@@ -7,7 +7,7 @@ import { LANGS, createTranslator, formatMonth } from './i18n.js';
 import {
   ADMIN_AUTH_EMAIL, getPublicUrl, qrUrl, registerPdfFont, normalizeRelayName,
   getRelayStatusFromDate, statusConfig, csvEscape, parseCSV, downloadTextFile,
-  CSV_FIELD_I18N_KEYS, CSV_HEADER_TO_FIELD, navItems,
+  CSV_FIELD_I18N_KEYS, CSV_HEADER_TO_FIELD, navItems, RELAY_DIFF_FIELDS, buildRelayDiff,
 } from './relayHelpers.js';
 import {
   Modal, ConfirmModal, StatCard, ThemeToggle, LanguageToggle, MechanicSelect, MexanikStatsPanel,
@@ -506,9 +506,11 @@ export default function RelayDashboard() {
   };
 
   const handleSaveEdit = async () => {
+    const before = relays.find((r) => r.id === selectedRelay.id);
     await supabase.from('relays').update(fromRelay(selectedRelay)).eq('id', selectedRelay.id);
     setRelays(relays.map((r) => r.id === selectedRelay.id ? { ...selectedRelay } : r));
-    logActivity('update', 'relay', `${selectedRelay.name} (${selectedRelay.num})`);
+    const diff = buildRelayDiff(before, selectedRelay, getStationName);
+    logActivity('update', 'relay', `${selectedRelay.name} (${selectedRelay.num})`, diff.length ? JSON.stringify(diff) : null);
     setIsDirty(false);
     setSelectedRelay(null);
   };
@@ -540,7 +542,10 @@ export default function RelayDashboard() {
     const ids = selectedRelayIds;
     await supabase.from('relays').update(dbUpdates).in('id', ids);
     setRelays((cur) => cur.map((r) => ids.includes(r.id) ? { ...r, ...localUpdates } : r));
-    logActivity('update', 'relay', t('bulkEdit.logLabel', ids.length));
+    const bulkChanges = RELAY_DIFF_FIELDS
+      .filter((f) => f.key in localUpdates)
+      .map((f) => ({ field: f.key, after: f.key === 'stationId' ? getStationName(localUpdates[f.key]) : localUpdates[f.key] }));
+    logActivity('update', 'relay', t('bulkEdit.logLabel', ids.length), bulkChanges.length ? JSON.stringify(bulkChanges) : null);
     setBulkEditOpen(false);
     setSelectedRelayIds([]);
     setBulkEdit({
@@ -2250,20 +2255,52 @@ export default function RelayDashboard() {
                       : entry.action === 'delete'
                         ? 'text-red-400 bg-red-500/10 border-red-500/30'
                         : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+                    let diffChanges = null;
+                    if (entry.details) {
+                      try {
+                        const parsed = JSON.parse(entry.details);
+                        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0] && typeof parsed[0] === 'object' && 'field' in parsed[0]) {
+                          diffChanges = parsed;
+                        }
+                      } catch {}
+                    }
                     return (
-                      <div key={entry.id} className="flex items-center gap-3 px-4 py-3">
-                        <span className={`flex-shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${actionColor}`}>
-                          {t(`activityLog.action.${entry.action}`)}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm text-white truncate">
-                            <span className="font-semibold">{entry.actor_name}</span>
-                            {' — '}{t(`activityLog.entity.${entry.entity_type}`)}: {entry.entity_label}
+                      <div key={entry.id} className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className={`flex-shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${actionColor}`}>
+                            {t(`activityLog.action.${entry.action}`)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm text-white truncate">
+                              <span className="font-semibold">{entry.actor_name}</span>
+                              {' — '}{t(`activityLog.entity.${entry.entity_type}`)}: {entry.entity_label}
+                            </p>
+                          </div>
+                          <p className="text-xs text-white/40 flex-shrink-0">
+                            {new Date(entry.created_at).toLocaleString(lang === 'uz' ? 'uz-UZ' : lang === 'ru' ? 'ru-RU' : 'en-US')}
                           </p>
                         </div>
-                        <p className="text-xs text-white/40 flex-shrink-0">
-                          {new Date(entry.created_at).toLocaleString(lang === 'uz' ? 'uz-UZ' : lang === 'ru' ? 'ru-RU' : 'en-US')}
-                        </p>
+                        {diffChanges && (
+                          <div className="mt-2 ml-1 space-y-1 border-l-2 border-white/10 pl-3">
+                            {diffChanges.map((c, i) => {
+                              const labelKey = RELAY_DIFF_FIELDS.find((f) => f.key === c.field)?.labelKey;
+                              return (
+                                <p key={i} className="text-xs">
+                                  <span className="text-white/40">{labelKey ? t(labelKey) : c.field}: </span>
+                                  {'before' in c ? (
+                                    <>
+                                      <span className="text-red-400/70 line-through">{c.before || '—'}</span>
+                                      <span className="text-white/30"> → </span>
+                                      <span className="text-emerald-400">{c.after || '—'}</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-emerald-400">{c.after || '—'}</span>
+                                  )}
+                                </p>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
