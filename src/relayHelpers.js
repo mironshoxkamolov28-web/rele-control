@@ -20,7 +20,7 @@ export async function registerPdfFont(doc) {
 }
 
 export function normalizeRelayName(name) {
-  return (name || '').replace(/\s+/g, '').toUpperCase();
+  return (name || '').replace(/\s+/g, '').replace(/[‐-―−]/g, '-').toUpperCase();
 }
 
 export function getRelayStatusFromDate(dateString) {
