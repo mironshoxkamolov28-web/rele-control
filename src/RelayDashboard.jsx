@@ -80,6 +80,7 @@ export default function RelayDashboard() {
   const t = createTranslator(lang);
   const [qrPreviewRelay, setQrPreviewRelay] = useState(null);
   const [viewStation, setViewStation] = useState(null);
+  const [viewStationNameFilter, setViewStationNameFilter] = useState(null);
   const [viewMexanik, setViewMexanik] = useState(null);
   const [viewMexanikMonth, setViewMexanikMonth] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -139,6 +140,10 @@ export default function RelayDashboard() {
   useEffect(() => {
     try { localStorage.setItem('rc_active_nav', activeNav); } catch {}
   }, [activeNav]);
+
+  useEffect(() => {
+    setViewStationNameFilter(null);
+  }, [viewStation]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -347,6 +352,9 @@ export default function RelayDashboard() {
       return acc;
     }, {})
   ).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  const filteredViewStationRelays = viewStationNameFilter
+    ? viewStationRelays.filter((r) => (normalizeRelayName(r.name) || '—') === viewStationNameFilter)
+    : viewStationRelays;
 
   const viewMexanikData = viewMexanik ? mexaniklar.find((m) => m.id === viewMexanik) : null;
   const viewMexanikRelays = viewMexanikData
@@ -1274,19 +1282,34 @@ export default function RelayDashboard() {
 
               {viewStationNameCounts.length > 0 && (
                 <div className="glass rounded-2xl p-5">
-                  <h3 className="text-sm font-bold text-white/80 mb-4">{t('stationView.byName')}</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold text-white/80">{t('stationView.byName')}</h3>
+                    {viewStationNameFilter && (
+                      <button onClick={() => setViewStationNameFilter(null)}
+                        className="text-xs font-medium text-white/50 transition hover:text-white">
+                        {t('stationView.clearFilter')} ✕
+                      </button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {viewStationNameCounts.map((item) => (
-                      <div key={item.name} className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2">
-                        <span className="text-sm text-white/70 truncate">{item.name}</span>
-                        <span className="flex-shrink-0 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-xs font-bold text-amber-400">{item.count}</span>
-                      </div>
-                    ))}
+                    {viewStationNameCounts.map((item) => {
+                      const isActive = viewStationNameFilter === item.name;
+                      return (
+                        <button key={item.name} type="button"
+                          onClick={() => setViewStationNameFilter(isActive ? null : item.name)}
+                          className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left transition ${
+                            isActive ? 'bg-amber-500/20 ring-1 ring-amber-500/40' : 'bg-white/5 hover:bg-white/10'
+                          }`}>
+                          <span className={`text-sm truncate ${isActive ? 'text-amber-400' : 'text-white/70'}`}>{item.name}</span>
+                          <span className="flex-shrink-0 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-xs font-bold text-amber-400">{item.count}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              {viewStationRelays.length === 0 ? (
+              {filteredViewStationRelays.length === 0 ? (
                 <div className="glass rounded-2xl p-12 text-center animate-fade-in">
                   <div className="text-5xl mb-4 opacity-30">🔍</div>
                   <p className="text-lg font-semibold text-white/60">{t('stationView.empty')}</p>
@@ -1305,7 +1328,7 @@ export default function RelayDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {viewStationRelays.map((relay) => {
+                      {filteredViewStationRelays.map((relay) => {
                         const sc = statusConfig[relay.status];
                         return (
                           <tr key={relay.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
@@ -1349,7 +1372,7 @@ export default function RelayDashboard() {
               )}
 
               <div className="md:hidden grid grid-cols-1 gap-4">
-                {viewStationRelays.map((relay, idx) => {
+                {filteredViewStationRelays.map((relay, idx) => {
                   const sc = statusConfig[relay.status];
                   return (
                     <div key={relay.id}

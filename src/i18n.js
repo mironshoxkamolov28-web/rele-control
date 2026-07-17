@@ -146,6 +146,7 @@ export const translations = {
     'stationView.subtitle': "Stansiya bo'yicha statistika va relelar",
     'stationView.empty': "Bu stansiyada rele yo'q",
     'stationView.byName': "Rele nomi bo'yicha statistika",
+    'stationView.clearFilter': "Tozalash",
 
     'mexanikView.subtitle': "Mexanik bo'yicha statistika",
     'mexanikView.totalChecked': "Jami tekshirilgan relelar",
@@ -405,6 +406,7 @@ export const translations = {
     'stationView.subtitle': "Статистика и реле по станции",
     'stationView.empty': "На этой станции нет реле",
     'stationView.byName': "Статистика по названию реле",
+    'stationView.clearFilter': "Очистить",
 
     'mexanikView.subtitle': "Статистика по механику",
     'mexanikView.totalChecked': "Всего проверено реле",
@@ -664,6 +666,7 @@ export const translations = {
     'stationView.subtitle': "Station stats and relays",
     'stationView.empty': "No relays at this station",
     'stationView.byName': "Statistics by relay name",
+    'stationView.clearFilter': "Clear",
 
     'mexanikView.subtitle': "Mechanic statistics",
     'mexanikView.totalChecked': "Total relays checked",
