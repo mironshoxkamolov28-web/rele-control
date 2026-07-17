@@ -19,8 +19,18 @@ export async function registerPdfFont(doc) {
   doc.setFont('Roboto', 'normal');
 }
 
+const LATIN_TO_CYRILLIC_LOOKALIKE = { A: 'А', B: 'В', E: 'Е', K: 'К', M: 'М', H: 'Н', O: 'О', P: 'Р', C: 'С', T: 'Т', X: 'Х', Y: 'У' };
+
 export function normalizeRelayName(name) {
-  return (name || '').replace(/\s+/g, '').replace(/[‐-―−]/g, '-').toUpperCase();
+  let n = (name || '').replace(/\s+/g, '').replace(/[‐-―−]/g, '-').toUpperCase();
+  if (/[А-ЯЁ]/.test(n) && /[A-Z]/.test(n)) {
+    // Nom bir vaqtning o'zida kiril va lotin harflarini o'z ichiga olsa — bu odatda
+    // klaviatura almashtirilganda tasodifan kirilcha o'rniga bir xil ko'rinishdagi
+    // lotin harfi bosilib ketgani (masalan "K" o'rniga "К"). Faqat aralash holatda
+    // tuzatamiz — sof lotincha kodlarga (masalan "M-1") tegilmaydi.
+    n = n.replace(/[ABEKMHOPCTXY]/g, (ch) => LATIN_TO_CYRILLIC_LOOKALIKE[ch]);
+  }
+  return n;
 }
 
 export function getRelayStatusFromDate(dateString) {
