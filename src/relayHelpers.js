@@ -2,6 +2,23 @@ import { LANGS, translations } from './i18n.js';
 
 export const ADMIN_AUTH_EMAIL = 'admin@relenazorat.local';
 
+// Supabase/PostgREST caps any single response at a fixed row limit (commonly
+// 1000), so a plain .select() silently truncates once a table grows past
+// that. Fetch in pages until a page comes back short, to get every row
+// regardless of how large the table gets.
+export async function fetchAllRows(supabase, table, columns = '*', pageSize = 1000) {
+  let allRows = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase.from(table).select(columns).range(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    allRows = allRows.concat(data || []);
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return { data: allRows, error: null };
+}
+
 export function getPublicUrl() {
   try { return localStorage.getItem('rc_public_url') || window.location.origin; } catch { return window.location.origin; }
 }

@@ -8,6 +8,7 @@ import {
   ADMIN_AUTH_EMAIL, getPublicUrl, qrUrl, registerPdfFont, normalizeRelayName,
   getRelayStatusFromDate, statusConfig, csvEscape, parseCSV, downloadTextFile,
   CSV_FIELD_I18N_KEYS, CSV_HEADER_TO_FIELD, navItems, RELAY_DIFF_FIELDS, buildRelayDiff,
+  fetchAllRows,
 } from './relayHelpers.js';
 import {
   Modal, ConfirmModal, StatCard, ThemeToggle, LanguageToggle, MechanicSelect, MexanikStatsPanel,
@@ -121,7 +122,7 @@ export default function RelayDashboard() {
     if (isPublicPage) { setLoading(false); return; }
     Promise.all([
       supabase.from('stations').select('id,name,username,uchastka_id'),
-      supabase.from('relays').select('*'),
+      fetchAllRows(supabase, 'relays', '*'),
       supabase.from('uchastkalar').select('*'),
       supabase.from('mexaniklar').select('id,name,username'),
     ]).then(([{ data: stationsData }, { data: relaysData }, { data: uchastkalarData }, { data: mexaniklarData }]) => {
