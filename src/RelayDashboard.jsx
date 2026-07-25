@@ -236,7 +236,7 @@ export default function RelayDashboard() {
     );
   const visibleRelays = stationRelays
     .filter((r) => filterStatus === 'all' || r.status === filterStatus)
-    .filter((r) => r.name.toLowerCase().includes(searchQuery.toLowerCase()) || r.num.includes(searchQuery))
+    .filter((r) => normalizeRelayName(r.name).includes(normalizeRelayName(searchQuery)) || r.num.includes(searchQuery))
     .sort((a, b) => {
       if (!a.nextCheck) return 1;
       if (!b.nextCheck) return -1;
@@ -252,6 +252,15 @@ export default function RelayDashboard() {
     warning: stationRelays.filter((r) => r.status === 'yellow').length,
     active: stationRelays.filter((r) => r.status === 'green').length,
   };
+
+  const globalNameCounts = Object.values(
+    stationRelays.reduce((acc, r) => {
+      const key = normalizeRelayName(r.name) || '—';
+      acc[key] = acc[key] || { name: key, count: 0 };
+      acc[key].count += 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
   const visibleStations = auth?.id === 'admin'
     ? stations.filter((s) => s.id !== 'admin')
@@ -1515,6 +1524,22 @@ export default function RelayDashboard() {
                   })}
                 </div>
               </div>
+
+              {globalNameCounts.length > 0 && (
+                <div className="glass rounded-2xl p-5">
+                  <h3 className="text-sm font-bold text-white/80 mb-4">{t('stationView.byName')}</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {globalNameCounts.map((item) => (
+                      <button key={item.name} type="button"
+                        onClick={() => { setActiveNav('relays'); setFilterStatus('all'); setSearchQuery(item.name); }}
+                        className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2 text-left transition hover:bg-white/10">
+                        <span className="text-sm text-white/70 truncate">{item.name}</span>
+                        <span className="flex-shrink-0 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-xs font-bold text-amber-400">{item.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
