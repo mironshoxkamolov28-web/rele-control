@@ -5,3 +5,5 @@ export { ThemeToggle } from './ThemeToggle.jsx';
 export { LanguageToggle } from './LanguageToggle.jsx';
 export { MechanicSelect } from './MechanicSelect.jsx';
 export { MexanikStatsPanel } from './MexanikStatsPanel.jsx';
+export { default as AppSidebar } from './AppSidebar.jsx';
+export { default as ToastContainer } from './ToastContainer.jsx';

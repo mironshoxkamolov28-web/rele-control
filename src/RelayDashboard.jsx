@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
-import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
+import { jsPDF } from 'jspdf';
 import { supabase, toRelay, fromRelay } from './supabase.js';
 import { LANGS, createTranslator, formatMonth } from './i18n.js';
 import {
@@ -10,36 +9,49 @@ import {
   CSV_FIELD_I18N_KEYS, CSV_HEADER_TO_FIELD, navItems, RELAY_DIFF_FIELDS, buildRelayDiff,
   fetchAllRows,
 } from './relayHelpers.js';
-import {
-  Modal, ConfirmModal, StatCard, ThemeToggle, LanguageToggle, MechanicSelect, MexanikStatsPanel,
-} from './components';
+import { ConfirmModal, AppSidebar, ToastContainer, LanguageToggle, ThemeToggle } from './components';
+
+// Pages
+import LoadingScreen from './pages/LoadingScreen.jsx';
+import PublicRelayPage from './pages/PublicRelayPage.jsx';
+import LoginPage from './pages/LoginPage.jsx';
+import MexanikPage from './pages/MexanikPage.jsx';
+import DashboardPage from './pages/DashboardPage.jsx';
+import StationDetailView from './pages/StationDetailView.jsx';
+import RelaysPage from './pages/RelaysPage.jsx';
+import AddRelayPage from './pages/AddRelayPage.jsx';
+import StationsPage from './pages/StationsPage.jsx';
+import AddStationPage from './pages/AddStationPage.jsx';
+import MonthlyPlanPage from './pages/MonthlyPlanPage.jsx';
+import UchastkalarPage from './pages/UchastkalarPage.jsx';
+import AddUchastkaPage from './pages/AddUchastkaPage.jsx';
+import MexaniklarPage from './pages/MexaniklarPage.jsx';
+import AddMexanikPage from './pages/AddMexanikPage.jsx';
+import ActivityLogPage from './pages/ActivityLogPage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
+import HelpPage from './pages/HelpPage.jsx';
+
+// Modals
+import EditRelayModal from './modals/EditRelayModal.jsx';
+import BulkEditModal from './modals/BulkEditModal.jsx';
+import ImportModal from './modals/ImportModal.jsx';
+import EditStationModal from './modals/EditStationModal.jsx';
+import EditUchastkaModal from './modals/EditUchastkaModal.jsx';
+import EditMexanikModal from './modals/EditMexanikModal.jsx';
+import QrPreviewModal from './modals/QrPreviewModal.jsx';
+import GlobalSearchModal from './modals/GlobalSearchModal.jsx';
+import { MexanikStatsPanel } from './components';
 
 export default function RelayDashboard() {
+  // ── Data ─────────────────────────────────────────────────────────────────
   const [stations, setStations] = useState([]);
   const [relays, setRelays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [publicRelay, setPublicRelay] = useState(null);
+  const [uchastkalar, setUchastkalar] = useState([]);
+  const [mexaniklar, setMexaniklar] = useState([]);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [mexanikSearch, setMexanikSearch] = useState('');
-  const [uchastkaSearch, setUchastkaSearch] = useState('');
-  const [monthlyPlanSearch, setMonthlyPlanSearch] = useState('');
-  const [selectedRelay, setSelectedRelay] = useState(null);
-  const [relayPage, setRelayPage] = useState(1);
-  const [relayPageSize, setRelayPageSize] = useState(20);
-  const [selectedRelayIds, setSelectedRelayIds] = useState([]);
-  const [bulkEditOpen, setBulkEditOpen] = useState(false);
-  const [bulkEdit, setBulkEdit] = useState({
-    applyStation: false, stationId: '',
-    applyNextCheck: false, nextCheck: '',
-    applyLastCheck: false, lastCheck: '',
-    applyStativ: false, stativ: '',
-    applyNote: false, note: '',
-  });
-  const [importPreview, setImportPreview] = useState(null);
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  const importFileInputRef = useRef(null);
+  // ── Auth ──────────────────────────────────────────────────────────────────
   const [auth, setAuth] = useState(() => {
     try {
       const saved = localStorage.getItem('rc_auth');
@@ -51,9 +63,40 @@ export default function RelayDashboard() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [adminFilterStation, setAdminFilterStation] = useState('all');
+
+  // ── UI ────────────────────────────────────────────────────────────────────
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('rc_theme') || 'dark'; } catch { return 'dark'; }
+  });
+  const [lang, setLang] = useState(() => {
+    try { return localStorage.getItem('rc_lang') || 'uz'; } catch { return 'uz'; }
+  });
+  const t = createTranslator(lang);
   const [activeNav, setActiveNav] = useState(() => {
     try { return localStorage.getItem('rc_active_nav') || 'dashboard'; } catch { return 'dashboard'; }
+  });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const toastTimersRef = useRef({});
+
+  // ── Relay list UI ─────────────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [adminFilterStation, setAdminFilterStation] = useState('all');
+  const [relayPage, setRelayPage] = useState(1);
+  const [relayPageSize, setRelayPageSize] = useState(20);
+  const [selectedRelayIds, setSelectedRelayIds] = useState([]);
+
+  // ── Editing state ─────────────────────────────────────────────────────────
+  const [selectedRelay, setSelectedRelay] = useState(null);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkEdit, setBulkEdit] = useState({
+    applyStation: false, stationId: '',
+    applyNextCheck: false, nextCheck: '',
+    applyLastCheck: false, lastCheck: '',
+    applyStativ: false, stativ: '',
+    applyNote: false, note: '',
   });
   const [newRelay, setNewRelay] = useState({
     stationId: '', name: '', num: '', stativ: '', lastCheck: '', nextCheck: '', note: '',
@@ -62,42 +105,45 @@ export default function RelayDashboard() {
   const [editingStation, setEditingStation] = useState(null);
   const [deleteStationId, setDeleteStationId] = useState(null);
   const [stationFormError, setStationFormError] = useState('');
-  const [uchastkalar, setUchastkalar] = useState([]);
   const [newUchastka, setNewUchastka] = useState({ name: '' });
   const [editingUchastka, setEditingUchastka] = useState(null);
   const [deleteUchastkaId, setDeleteUchastkaId] = useState(null);
   const [uchastkaFormError, setUchastkaFormError] = useState('');
-  const [mexaniklar, setMexaniklar] = useState([]);
   const [newMexanik, setNewMexanik] = useState({ name: '', username: '', password: '' });
   const [editingMexanik, setEditingMexanik] = useState(null);
   const [deleteMexanikId, setDeleteMexanikId] = useState(null);
   const [mexanikFormError, setMexanikFormError] = useState('');
-  const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('rc_theme') || 'dark'; } catch { return 'dark'; }
-  });
-  const [lang, setLang] = useState(() => {
-    try { return localStorage.getItem('rc_lang') || 'uz'; } catch { return 'uz'; }
-  });
-  const t = createTranslator(lang);
   const [qrPreviewRelay, setQrPreviewRelay] = useState(null);
+
+  // ── Search state ──────────────────────────────────────────────────────────
+  const [mexanikSearch, setMexanikSearch] = useState('');
+  const [uchastkaSearch, setUchastkaSearch] = useState('');
+  const [monthlyPlanSearch, setMonthlyPlanSearch] = useState('');
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+
+  // ── Detail views ──────────────────────────────────────────────────────────
   const [viewStation, setViewStation] = useState(null);
   const [viewStationNameFilter, setViewStationNameFilter] = useState(null);
   const [viewMexanik, setViewMexanik] = useState(null);
   const [viewMexanikMonth, setViewMexanikMonth] = useState(null);
-  const [isDirty, setIsDirty] = useState(false);
+
+  // ── Import ────────────────────────────────────────────────────────────────
+  const [importPreview, setImportPreview] = useState(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const importFileInputRef = useRef(null);
+
+  // ── Activity log ──────────────────────────────────────────────────────────
   const [activityLog, setActivityLog] = useState([]);
   const [activityLogLoading, setActivityLogLoading] = useState(false);
-  const [toasts, setToasts] = useState([]);
-  const toastTimersRef = useRef({});
-  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
-  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // ── Settings ──────────────────────────────────────────────────────────────
   const [publicUrl, setPublicUrl] = useState(() => {
     try { return localStorage.getItem('rc_public_url') || ''; } catch { return ''; }
   });
   const [publicUrlInput, setPublicUrlInput] = useState(publicUrl);
 
-  // Public QR sahifa uchun alohida fetch
+  // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => {
     const m = window.location.pathname.match(/^\/relay\/(\d+)$/);
     if (!m) return;
@@ -116,7 +162,6 @@ export default function RelayDashboard() {
       });
   }, []);
 
-  // Stansiya va relelarni Supabase dan yuklash
   useEffect(() => {
     const isPublicPage = /^\/relay\/\d+$/.test(window.location.pathname);
     if (isPublicPage) { setLoading(false); return; }
@@ -142,32 +187,23 @@ export default function RelayDashboard() {
     try { localStorage.setItem('rc_active_nav', activeNav); } catch {}
   }, [activeNav]);
 
-  useEffect(() => {
-    setViewStationNameFilter(null);
-  }, [viewStation]);
+  useEffect(() => { setViewStationNameFilter(null); }, [viewStation]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     try { localStorage.setItem('rc_theme', theme); } catch {}
   }, [theme]);
 
-  const toggleTheme = () => setTheme((cur) => (cur === 'dark' ? 'light' : 'dark'));
-
   useEffect(() => {
     try { localStorage.setItem('rc_lang', lang); } catch {}
   }, [lang]);
-
-  const cycleLang = () => setLang((cur) => LANGS[(LANGS.indexOf(cur) + 1) % LANGS.length]);
 
   useEffect(() => {
     if (auth?.id !== 'admin') return;
     supabase.auth.getSession().then(({ data }) => {
       if (!data?.session) {
         setAuth(null);
-        try {
-          localStorage.removeItem('rc_auth');
-          localStorage.removeItem('rc_active_nav');
-        } catch {}
+        try { localStorage.removeItem('rc_auth'); localStorage.removeItem('rc_active_nav'); } catch {}
       }
     });
   }, []);
@@ -179,20 +215,15 @@ export default function RelayDashboard() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  const confirmDiscard = () => !isDirty || window.confirm(t('common.unsavedChangesConfirm'));
-
   useEffect(() => {
-    return () => {
-      Object.values(toastTimersRef.current).forEach(clearTimeout);
-    };
+    return () => { Object.values(toastTimersRef.current).forEach(clearTimeout); };
   }, []);
 
   useEffect(() => {
     if (auth?.id !== 'admin') return;
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setGlobalSearchOpen(true);
+        e.preventDefault(); setGlobalSearchOpen(true);
       } else if (e.key === 'Escape') {
         setGlobalSearchOpen(false);
       }
@@ -202,15 +233,12 @@ export default function RelayDashboard() {
   }, [auth]);
 
   useEffect(() => {
-    setRelayPage(1);
-    setSelectedRelayIds([]);
+    setRelayPage(1); setSelectedRelayIds([]);
   }, [searchQuery, filterStatus, adminFilterStation, relayPageSize]);
 
   useEffect(() => {
     const adminOnlyNav = ['stations', 'settings', 'add-relay', 'add-station', 'uchastkalar', 'add-uchastka', 'mexaniklar', 'add-mexanik', 'monthly-plan', 'activity-log'];
-    if (auth && auth.id !== 'admin' && adminOnlyNav.includes(activeNav)) {
-      setActiveNav('dashboard');
-    }
+    if (auth && auth.id !== 'admin' && adminOnlyNav.includes(activeNav)) setActiveNav('dashboard');
   }, [auth]);
 
   useEffect(() => {
@@ -221,11 +249,13 @@ export default function RelayDashboard() {
     if (activeNav !== 'activity-log' || auth?.id !== 'admin') return;
     setActivityLogLoading(true);
     supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(200)
-      .then(({ data }) => {
-        setActivityLog(data || []);
-        setActivityLogLoading(false);
-      });
+      .then(({ data }) => { setActivityLog(data || []); setActivityLogLoading(false); });
   }, [activeNav, auth]);
+
+  // ── Computed values ───────────────────────────────────────────────────────
+  const toggleTheme = () => setTheme((cur) => (cur === 'dark' ? 'light' : 'dark'));
+  const cycleLang = () => setLang((cur) => LANGS[(LANGS.indexOf(cur) + 1) % LANGS.length]);
+  const confirmDiscard = () => !isDirty || window.confirm(t('common.unsavedChangesConfirm'));
 
   const stationRelays = relays
     .map((r) => ({ ...r, status: getRelayStatusFromDate(r.nextCheck) }))
@@ -234,6 +264,7 @@ export default function RelayDashboard() {
         ? adminFilterStation === 'all' ? true : relay.stationId === adminFilterStation
         : relay.stationId === auth?.id
     );
+
   const visibleRelays = stationRelays
     .filter((r) => filterStatus === 'all' || r.status === filterStatus)
     .filter((r) => normalizeRelayName(r.name).includes(normalizeRelayName(searchQuery)) || r.num.includes(searchQuery))
@@ -285,8 +316,8 @@ export default function RelayDashboard() {
       const q = monthlyPlanSearch.trim().toLowerCase();
       if (!q) return g;
       const stationMatches = g.station.name.toLowerCase().includes(q);
-      const relays = stationMatches ? g.relays : g.relays.filter((r) => r.name.toLowerCase().includes(q) || r.num.includes(monthlyPlanSearch));
-      return { ...g, relays };
+      const rs = stationMatches ? g.relays : g.relays.filter((r) => r.name.toLowerCase().includes(q) || r.num.includes(monthlyPlanSearch));
+      return { ...g, relays: rs };
     })
     .filter((g) => g.relays.length > 0);
 
@@ -303,41 +334,13 @@ export default function RelayDashboard() {
       mexaniklar: mexaniklar.filter((m) => m.name.toLowerCase().includes(q)).slice(0, 6),
     };
   })();
+
   const importValidRows = importPreview && !importPreview.error ? importPreview.rows.filter((r) => r.name && r.num && r.stationId) : [];
   const importInvalidCount = importPreview && !importPreview.error ? importPreview.rows.length - importValidRows.length : 0;
-
   const globalSearchHasResults = globalSearchResults && (
     globalSearchResults.relays.length || globalSearchResults.stations.length ||
     globalSearchResults.uchastkalar.length || globalSearchResults.mexaniklar.length
   );
-
-  const openGlobalSearchRelay = (relay) => {
-    setGlobalSearchOpen(false);
-    setGlobalSearchQuery('');
-    setActiveNav('relays');
-    setIsDirty(false);
-    setSelectedRelay({ ...relay });
-  };
-  const openGlobalSearchStation = (station) => {
-    setGlobalSearchOpen(false);
-    setGlobalSearchQuery('');
-    setActiveNav('stations');
-    setViewStation(station.id);
-  };
-  const openGlobalSearchUchastka = (uchastka) => {
-    setGlobalSearchOpen(false);
-    setGlobalSearchQuery('');
-    setActiveNav('uchastkalar');
-    setIsDirty(false);
-    setEditingUchastka({ id: uchastka.id, name: uchastka.name });
-  };
-  const openGlobalSearchMexanik = (mexanik) => {
-    setGlobalSearchOpen(false);
-    setGlobalSearchQuery('');
-    setActiveNav('mexaniklar');
-    setViewMexanik(mexanik.id);
-    setViewMexanikMonth(null);
-  };
 
   const viewStationData = viewStation ? stations.find((s) => s.id === viewStation) : null;
   const viewStationRelays = relays
@@ -387,13 +390,41 @@ export default function RelayDashboard() {
     ? viewMexanikRelays.filter((r) => (r.lastCheck ? r.lastCheck.slice(0, 7) : '') === viewMexanikMonth)
     : [];
 
+  const filteredNav = navItems.filter((item) => (item.adminOnly ? auth?.id === 'admin' : true));
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const logActivity = async (action, entityType, entityLabel, details) => {
+    try {
+      await supabase.from('activity_log').insert({
+        actor_id: auth?.id || 'unknown',
+        actor_name: auth?.name || 'unknown',
+        action, entity_type: entityType, entity_label: entityLabel,
+        details: details || null,
+      });
+    } catch {}
+  };
+
+  const pushUndoToast = (message, onCommit, onUndo) => {
+    const toastId = `${Date.now()}-${Math.random()}`;
+    toastTimersRef.current[toastId] = setTimeout(() => {
+      delete toastTimersRef.current[toastId];
+      setToasts((cur) => cur.filter((item) => item.id !== toastId));
+      onCommit();
+    }, 7000);
+    setToasts((cur) => [...cur, {
+      id: toastId, message,
+      undo: () => {
+        clearTimeout(toastTimersRef.current[toastId]);
+        delete toastTimersRef.current[toastId];
+        setToasts((cur2) => cur2.filter((item) => item.id !== toastId));
+        onUndo();
+      },
+    }]);
+  };
+
   const printQRCode = async (relay) => {
     const canvas = document.createElement('canvas');
-    await QRCode.toCanvas(canvas, qrUrl(relay), {
-      width: 400,
-      margin: 2,
-      color: { dark: '#000000', light: '#ffffff' },
-    });
+    await QRCode.toCanvas(canvas, qrUrl(relay), { width: 400, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
     const link = document.createElement('a');
     link.download = `QR-${relay.num}.png`;
     link.href = canvas.toDataURL('image/png');
@@ -404,115 +435,38 @@ export default function RelayDashboard() {
     event.preventDefault();
     if (loginStation.startsWith('mexanik:')) {
       const mexId = loginStation.slice('mexanik:'.length);
-      const { data, error } = await supabase.rpc('verify_mexanik_login', {
-        p_id: mexId,
-        p_username: loginUsername,
-        p_password: loginPassword,
-      });
+      const { data, error } = await supabase.rpc('verify_mexanik_login', { p_id: mexId, p_username: loginUsername, p_password: loginPassword });
       const mech = data?.[0];
-      if (error || !mech) {
-        setLoginError(t('login.error'));
-        return;
-      }
+      if (error || !mech) { setLoginError(t('login.error')); return; }
       const authObj = { id: mech.id, name: mech.name, isMexanik: true };
       setAuth(authObj);
       try { localStorage.setItem('rc_auth', JSON.stringify(authObj)); } catch {}
-      setViewMexanik(mech.id);
-      setLoginError('');
-      setLoginPassword('');
-      setLoginUsername('');
+      setViewMexanik(mech.id); setLoginError(''); setLoginPassword(''); setLoginUsername('');
       return;
     }
     if (loginStation === 'admin') {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: ADMIN_AUTH_EMAIL,
-        password: loginPassword,
-      });
-      if (error || !data?.user) {
-        setLoginError(t('login.error'));
-        return;
-      }
+      const { data, error } = await supabase.auth.signInWithPassword({ email: ADMIN_AUTH_EMAIL, password: loginPassword });
+      if (error || !data?.user) { setLoginError(t('login.error')); return; }
       const authObj = { id: 'admin', name: 'ADMIN (Barcha stansiyalar)' };
       setAuth(authObj);
       try { localStorage.setItem('rc_auth', JSON.stringify(authObj)); } catch {}
-      setLoginError('');
-      setSearchQuery('');
-      setFilterStatus('all');
-      setSelectedRelay(null);
-      setActiveNav('dashboard');
-      setLoginPassword('');
-      setLoginUsername('');
+      setLoginError(''); setSearchQuery(''); setFilterStatus('all'); setSelectedRelay(null); setActiveNav('dashboard'); setLoginPassword(''); setLoginUsername('');
       return;
     }
-    const { data, error } = await supabase.rpc('verify_station_login', {
-      p_id: loginStation,
-      p_username: loginUsername,
-      p_password: loginPassword,
-    });
+    const { data, error } = await supabase.rpc('verify_station_login', { p_id: loginStation, p_username: loginUsername, p_password: loginPassword });
     const station = data?.[0];
-    if (error || !station) {
-      setLoginError(t('login.error'));
-      return;
-    }
+    if (error || !station) { setLoginError(t('login.error')); return; }
     setAuth(station);
     try { localStorage.setItem('rc_auth', JSON.stringify({ id: station.id, name: station.name })); } catch {}
-    setLoginError('');
-    setSearchQuery('');
-    setFilterStatus('all');
-    setSelectedRelay(null);
-    setActiveNav('dashboard');
+    setLoginError(''); setSearchQuery(''); setFilterStatus('all'); setSelectedRelay(null); setActiveNav('dashboard');
   };
 
   const handleLogout = () => {
     supabase.auth.signOut();
-    setAuth(null);
-    setActiveNav('dashboard');
-    try {
-      localStorage.removeItem('rc_auth');
-      localStorage.removeItem('rc_active_nav');
-    } catch {}
-    setSelectedRelay(null);
-    setViewStation(null);
-    setViewMexanik(null);
-    setViewMexanikMonth(null);
-    setIsDirty(false);
-    setLoginPassword('');
-    setLoginUsername('');
-    setLoginError('');
-  };
-
-  const logActivity = async (action, entityType, entityLabel, details) => {
-    try {
-      await supabase.from('activity_log').insert({
-        actor_id: auth?.id || 'unknown',
-        actor_name: auth?.name || 'unknown',
-        action,
-        entity_type: entityType,
-        entity_label: entityLabel,
-        details: details || null,
-      });
-    } catch {}
-  };
-
-  // O'chirishni ekranda darhol yashiradi, real o'chirishni esa "Qaytarish"
-  // bosilmasa deb kutib, bir necha soniyaga kechiktiradi.
-  const pushUndoToast = (message, onCommit, onUndo) => {
-    const toastId = `${Date.now()}-${Math.random()}`;
-    toastTimersRef.current[toastId] = setTimeout(() => {
-      delete toastTimersRef.current[toastId];
-      setToasts((cur) => cur.filter((item) => item.id !== toastId));
-      onCommit();
-    }, 7000);
-    setToasts((cur) => [...cur, {
-      id: toastId,
-      message,
-      undo: () => {
-        clearTimeout(toastTimersRef.current[toastId]);
-        delete toastTimersRef.current[toastId];
-        setToasts((cur2) => cur2.filter((item) => item.id !== toastId));
-        onUndo();
-      },
-    }]);
+    setAuth(null); setActiveNav('dashboard');
+    try { localStorage.removeItem('rc_auth'); localStorage.removeItem('rc_active_nav'); } catch {}
+    setSelectedRelay(null); setViewStation(null); setViewMexanik(null); setViewMexanikMonth(null);
+    setIsDirty(false); setLoginPassword(''); setLoginUsername(''); setLoginError('');
   };
 
   const handleSaveEdit = async () => {
@@ -521,50 +475,25 @@ export default function RelayDashboard() {
     setRelays(relays.map((r) => r.id === selectedRelay.id ? { ...selectedRelay } : r));
     const diff = buildRelayDiff(before, selectedRelay, getStationName);
     logActivity('update', 'relay', `${selectedRelay.name} (${selectedRelay.num})`, diff.length ? JSON.stringify(diff) : null);
-    setIsDirty(false);
-    setSelectedRelay(null);
+    setIsDirty(false); setSelectedRelay(null);
   };
 
   const handleSaveBulkEdit = async () => {
-    const dbUpdates = {};
-    const localUpdates = {};
-    if (bulkEdit.applyStation && bulkEdit.stationId) {
-      dbUpdates.station_id = bulkEdit.stationId;
-      localUpdates.stationId = bulkEdit.stationId;
-    }
-    if (bulkEdit.applyNextCheck && bulkEdit.nextCheck) {
-      dbUpdates.next_check = bulkEdit.nextCheck;
-      localUpdates.nextCheck = bulkEdit.nextCheck;
-    }
-    if (bulkEdit.applyLastCheck && bulkEdit.lastCheck) {
-      dbUpdates.last_check = bulkEdit.lastCheck;
-      localUpdates.lastCheck = bulkEdit.lastCheck;
-    }
-    if (bulkEdit.applyStativ && bulkEdit.stativ.trim()) {
-      dbUpdates.stativ = bulkEdit.stativ.trim();
-      localUpdates.stativ = bulkEdit.stativ.trim();
-    }
-    if (bulkEdit.applyNote) {
-      dbUpdates.note = bulkEdit.note || null;
-      localUpdates.note = bulkEdit.note;
-    }
+    const dbUpdates = {}; const localUpdates = {};
+    if (bulkEdit.applyStation && bulkEdit.stationId) { dbUpdates.station_id = bulkEdit.stationId; localUpdates.stationId = bulkEdit.stationId; }
+    if (bulkEdit.applyNextCheck && bulkEdit.nextCheck) { dbUpdates.next_check = bulkEdit.nextCheck; localUpdates.nextCheck = bulkEdit.nextCheck; }
+    if (bulkEdit.applyLastCheck && bulkEdit.lastCheck) { dbUpdates.last_check = bulkEdit.lastCheck; localUpdates.lastCheck = bulkEdit.lastCheck; }
+    if (bulkEdit.applyStativ && bulkEdit.stativ.trim()) { dbUpdates.stativ = bulkEdit.stativ.trim(); localUpdates.stativ = bulkEdit.stativ.trim(); }
+    if (bulkEdit.applyNote) { dbUpdates.note = bulkEdit.note || null; localUpdates.note = bulkEdit.note; }
     if (Object.keys(dbUpdates).length === 0) return;
     const ids = selectedRelayIds;
     await supabase.from('relays').update(dbUpdates).in('id', ids);
     setRelays((cur) => cur.map((r) => ids.includes(r.id) ? { ...r, ...localUpdates } : r));
-    const bulkChanges = RELAY_DIFF_FIELDS
-      .filter((f) => f.key in localUpdates)
+    const bulkChanges = RELAY_DIFF_FIELDS.filter((f) => f.key in localUpdates)
       .map((f) => ({ field: f.key, after: f.key === 'stationId' ? getStationName(localUpdates[f.key]) : localUpdates[f.key] }));
     logActivity('update', 'relay', t('bulkEdit.logLabel', ids.length), bulkChanges.length ? JSON.stringify(bulkChanges) : null);
-    setBulkEditOpen(false);
-    setSelectedRelayIds([]);
-    setBulkEdit({
-      applyStation: false, stationId: '',
-      applyNextCheck: false, nextCheck: '',
-      applyLastCheck: false, lastCheck: '',
-      applyStativ: false, stativ: '',
-      applyNote: false, note: '',
-    });
+    setBulkEditOpen(false); setSelectedRelayIds([]);
+    setBulkEdit({ applyStation: false, stationId: '', applyNextCheck: false, nextCheck: '', applyLastCheck: false, lastCheck: '', applyStativ: false, stativ: '', applyNote: false, note: '' });
   };
 
   const handleAddRelay = async () => {
@@ -583,10 +512,7 @@ export default function RelayDashboard() {
     setStationFormError('');
     if (!newStation.name.trim() || !newStation.username.trim() || !newStation.password.trim()) return;
     const newId = newStation.username.trim().toLowerCase().replace(/\s+/g, '-');
-    if (stations.some((s) => s.id === newId)) {
-      setStationFormError(t('errors.usernameTaken', newStation.username));
-      return;
-    }
+    if (stations.some((s) => s.id === newId)) { setStationFormError(t('errors.usernameTaken', newStation.username)); return; }
     const row = { id: newId, name: newStation.name, username: newStation.username, uchastka_id: newStation.uchastkaId || null };
     const { error } = await supabase.from('stations').insert(row);
     if (error) { setStationFormError(error.message); return; }
@@ -594,8 +520,7 @@ export default function RelayDashboard() {
     if (pwError) { setStationFormError(pwError.message); return; }
     setStations([...stations, row]);
     logActivity('create', 'station', row.name);
-    setIsDirty(false);
-    setNewStation({ name: '', username: '', password: '', uchastkaId: '' });
+    setIsDirty(false); setNewStation({ name: '', username: '', password: '', uchastkaId: '' });
   };
 
   const handleUpdateStation = async () => {
@@ -603,23 +528,14 @@ export default function RelayDashboard() {
     setStationFormError('');
     const oldId = editingStation._originalId;
     const newId = editingStation.username.trim().toLowerCase().replace(/\s+/g, '-');
-    if (newId !== oldId && stations.some((s) => s.id === newId)) {
-      setStationFormError(t('errors.usernameTaken', editingStation.username));
-      return;
-    }
+    if (newId !== oldId && stations.some((s) => s.id === newId)) { setStationFormError(t('errors.usernameTaken', editingStation.username)); return; }
     const row = { id: newId, name: editingStation.name, username: editingStation.username, uchastka_id: editingStation.uchastka_id || null };
     if (oldId !== newId) {
-      // Login o'zgarsa ID ham o'zgaradi — parol hash'i va relelarni yangi ID'ga
-      // xavfsiz ko'chirish uchun server-tomon funksiyani chaqiramiz.
-      const { error: renameError } = await supabase.rpc('rename_station', {
-        p_old_id: oldId, p_new_id: newId, p_name: row.name, p_username: row.username, p_uchastka_id: row.uchastka_id,
-      });
+      const { error: renameError } = await supabase.rpc('rename_station', { p_old_id: oldId, p_new_id: newId, p_name: row.name, p_username: row.username, p_uchastka_id: row.uchastka_id });
       if (renameError) { setStationFormError(renameError.message); return; }
       setRelays(relays.map((r) => r.stationId === oldId ? { ...r, stationId: newId } : r));
     } else {
-      const { error } = await supabase.from('stations')
-        .update({ name: row.name, username: row.username, uchastka_id: row.uchastka_id })
-        .eq('id', oldId);
+      const { error } = await supabase.from('stations').update({ name: row.name, username: row.username, uchastka_id: row.uchastka_id }).eq('id', oldId);
       if (error) { setStationFormError(error.message); return; }
     }
     if (editingStation.password.trim()) {
@@ -628,8 +544,7 @@ export default function RelayDashboard() {
     }
     setStations(stations.map((s) => s.id === oldId ? row : s));
     logActivity('update', 'station', row.name);
-    setIsDirty(false);
-    setEditingStation(null);
+    setIsDirty(false); setEditingStation(null);
   };
 
   const handleDeleteRelay = (id) => {
@@ -638,10 +553,7 @@ export default function RelayDashboard() {
     setRelays((cur) => cur.filter((r) => r.id !== id));
     pushUndoToast(
       t('toast.deleted', `${relay.name} (${relay.num})`),
-      async () => {
-        await supabase.from('relays').delete().eq('id', id);
-        logActivity('delete', 'relay', `${relay.name} (${relay.num})`);
-      },
+      async () => { await supabase.from('relays').delete().eq('id', id); logActivity('delete', 'relay', `${relay.name} (${relay.num})`); },
       () => setRelays((cur) => [...cur, relay]),
     );
   };
@@ -657,15 +569,8 @@ export default function RelayDashboard() {
     if (!station) return;
     pushUndoToast(
       t('toast.deleted', station.name),
-      async () => {
-        await supabase.from('relays').delete().eq('station_id', stationId);
-        await supabase.from('stations').delete().eq('id', stationId);
-        logActivity('delete', 'station', station.name);
-      },
-      () => {
-        setStations((cur) => [...cur, station]);
-        setRelays((cur) => [...cur, ...stationRelaysSnapshot]);
-      },
+      async () => { await supabase.from('relays').delete().eq('station_id', stationId); await supabase.from('stations').delete().eq('id', stationId); logActivity('delete', 'station', station.name); },
+      () => { setStations((cur) => [...cur, station]); setRelays((cur) => [...cur, ...stationRelaysSnapshot]); },
     );
   };
 
@@ -673,17 +578,13 @@ export default function RelayDashboard() {
     setUchastkaFormError('');
     if (!newUchastka.name.trim()) return;
     const newId = newUchastka.name.trim().toLowerCase().replace(/\s+/g, '-');
-    if (uchastkalar.some((u) => u.id === newId)) {
-      setUchastkaFormError(t('errors.uchastkaExists', newUchastka.name));
-      return;
-    }
+    if (uchastkalar.some((u) => u.id === newId)) { setUchastkaFormError(t('errors.uchastkaExists', newUchastka.name)); return; }
     const row = { id: newId, name: newUchastka.name };
     const { error } = await supabase.from('uchastkalar').insert(row);
     if (error) { setUchastkaFormError(error.message); return; }
     setUchastkalar([...uchastkalar, row]);
     logActivity('create', 'uchastka', row.name);
-    setIsDirty(false);
-    setNewUchastka({ name: '' });
+    setIsDirty(false); setNewUchastka({ name: '' });
   };
 
   const handleUpdateUchastka = async () => {
@@ -693,8 +594,7 @@ export default function RelayDashboard() {
     if (error) return;
     setUchastkalar(uchastkalar.map((u) => u.id === row.id ? row : u));
     logActivity('update', 'uchastka', row.name);
-    setIsDirty(false);
-    setEditingUchastka(null);
+    setIsDirty(false); setEditingUchastka(null);
   };
 
   const handleDeleteUchastka = () => {
@@ -708,15 +608,8 @@ export default function RelayDashboard() {
     if (!uchastka) return;
     pushUndoToast(
       t('toast.deleted', uchastka.name),
-      async () => {
-        await supabase.from('stations').update({ uchastka_id: null }).eq('uchastka_id', uchastkaId);
-        await supabase.from('uchastkalar').delete().eq('id', uchastkaId);
-        logActivity('delete', 'uchastka', uchastka.name);
-      },
-      () => {
-        setUchastkalar((cur) => [...cur, uchastka]);
-        setStations((cur) => cur.map((s) => affectedStationIds.includes(s.id) ? { ...s, uchastka_id: uchastkaId } : s));
-      },
+      async () => { await supabase.from('stations').update({ uchastka_id: null }).eq('uchastka_id', uchastkaId); await supabase.from('uchastkalar').delete().eq('id', uchastkaId); logActivity('delete', 'uchastka', uchastka.name); },
+      () => { setUchastkalar((cur) => [...cur, uchastka]); setStations((cur) => cur.map((s) => affectedStationIds.includes(s.id) ? { ...s, uchastka_id: uchastkaId } : s)); },
     );
   };
 
@@ -724,10 +617,7 @@ export default function RelayDashboard() {
     setMexanikFormError('');
     if (!newMexanik.name.trim()) return;
     const newId = newMexanik.name.trim().toLowerCase().replace(/\s+/g, '-');
-    if (mexaniklar.some((m) => m.id === newId)) {
-      setMexanikFormError(t('errors.mexanikExists', newMexanik.name));
-      return;
-    }
+    if (mexaniklar.some((m) => m.id === newId)) { setMexanikFormError(t('errors.mexanikExists', newMexanik.name)); return; }
     const row = { id: newId, name: newMexanik.name, username: newMexanik.username.trim() || null };
     const { error } = await supabase.from('mexaniklar').insert(row);
     if (error) { setMexanikFormError(error.message); return; }
@@ -737,8 +627,7 @@ export default function RelayDashboard() {
     }
     setMexaniklar([...mexaniklar, row]);
     logActivity('create', 'mexanik', row.name);
-    setIsDirty(false);
-    setNewMexanik({ name: '', username: '', password: '' });
+    setIsDirty(false); setNewMexanik({ name: '', username: '', password: '' });
   };
 
   const handleUpdateMexanik = async () => {
@@ -752,8 +641,7 @@ export default function RelayDashboard() {
     }
     setMexaniklar(mexaniklar.map((m) => m.id === row.id ? row : m));
     logActivity('update', 'mexanik', row.name);
-    setIsDirty(false);
-    setEditingMexanik(null);
+    setIsDirty(false); setEditingMexanik(null);
   };
 
   const handleDeleteMexanik = () => {
@@ -765,10 +653,7 @@ export default function RelayDashboard() {
     if (!mexanik) return;
     pushUndoToast(
       t('toast.deleted', mexanik.name),
-      async () => {
-        await supabase.from('mexaniklar').delete().eq('id', mexanikId);
-        logActivity('delete', 'mexanik', mexanik.name);
-      },
+      async () => { await supabase.from('mexaniklar').delete().eq('id', mexanikId); logActivity('delete', 'mexanik', mexanik.name); },
       () => setMexaniklar((cur) => [...cur, mexanik]),
     );
   };
@@ -780,10 +665,7 @@ export default function RelayDashboard() {
     doc.text(`Rele-Control — ${auth?.id === 'admin' ? 'ADMIN hisobot' : auth?.name || 'Hisobot'}`, 14, 16);
     doc.setFontSize(10);
     let y = 30;
-    stationRelays.forEach((r, i) => {
-      doc.text(`${i + 1}. ${r.name} (${r.num}) | ${r.nextCheck} [${r.status.toUpperCase()}]`, 14, y);
-      y += 8;
-    });
+    stationRelays.forEach((r, i) => { doc.text(`${i + 1}. ${r.name} (${r.num}) | ${r.nextCheck} [${r.status.toUpperCase()}]`, 14, y); y += 8; });
     doc.save('rele-hisobot.pdf');
   };
 
@@ -804,38 +686,26 @@ export default function RelayDashboard() {
   const handleRelayImportFile = async (file) => {
     const text = await file.text();
     const rows = parseCSV(text);
-    if (rows.length < 2) {
-      setImportPreview({ error: t('bulkImport.emptyFile'), rows: [] });
-      setImportModalOpen(true);
-      return;
-    }
+    if (rows.length < 2) { setImportPreview({ error: t('bulkImport.emptyFile'), rows: [] }); setImportModalOpen(true); return; }
     const headerRow = rows[0].map((h) => h.trim().toLowerCase());
     const fieldIndexes = {};
-    headerRow.forEach((h, idx) => {
-      const fieldKey = CSV_HEADER_TO_FIELD[h];
-      if (fieldKey) fieldIndexes[fieldKey] = idx;
-    });
+    headerRow.forEach((h, idx) => { const fieldKey = CSV_HEADER_TO_FIELD[h]; if (fieldKey) fieldIndexes[fieldKey] = idx; });
     if (fieldIndexes.name === undefined || fieldIndexes.num === undefined || fieldIndexes.station === undefined) {
-      setImportPreview({ error: t('bulkImport.missingColumns'), rows: [] });
-      setImportModalOpen(true);
-      return;
+      setImportPreview({ error: t('bulkImport.missingColumns'), rows: [] }); setImportModalOpen(true); return;
     }
     const parsed = rows.slice(1).map((cols) => {
       const stationName = (cols[fieldIndexes.station] || '').trim();
       const station = stations.find((s) => s.id !== 'admin' && s.name.trim().toLowerCase() === stationName.toLowerCase());
       return {
-        name: (cols[fieldIndexes.name] || '').trim(),
-        num: (cols[fieldIndexes.num] || '').trim(),
-        stationName,
-        stationId: station?.id || null,
+        name: (cols[fieldIndexes.name] || '').trim(), num: (cols[fieldIndexes.num] || '').trim(),
+        stationName, stationId: station?.id || null,
         stativ: fieldIndexes.stativ !== undefined ? (cols[fieldIndexes.stativ] || '').trim() : '',
         lastCheck: fieldIndexes.lastCheck !== undefined ? (cols[fieldIndexes.lastCheck] || '').trim() : '',
         nextCheck: fieldIndexes.nextCheck !== undefined ? (cols[fieldIndexes.nextCheck] || '').trim() : '',
         note: fieldIndexes.note !== undefined ? (cols[fieldIndexes.note] || '').trim() : '',
       };
     });
-    setImportPreview({ rows: parsed });
-    setImportModalOpen(true);
+    setImportPreview({ rows: parsed }); setImportModalOpen(true);
   };
 
   const handleConfirmImport = async () => {
@@ -843,41 +713,25 @@ export default function RelayDashboard() {
     const validRows = importPreview.rows.filter((r) => r.name && r.num && r.stationId);
     if (validRows.length === 0) return;
     const toInsert = validRows.map((r) => ({
-      station_id: r.stationId,
-      name: r.name,
-      num: r.num,
-      stativ: r.stativ || null,
-      last_check: r.lastCheck || null,
-      next_check: r.nextCheck || null,
-      note: r.note || null,
+      station_id: r.stationId, name: r.name, num: r.num,
+      stativ: r.stativ || null, last_check: r.lastCheck || null,
+      next_check: r.nextCheck || null, note: r.note || null,
     }));
     const { data } = await supabase.from('relays').insert(toInsert).select();
-    if (data) {
-      setRelays((cur) => [...cur, ...data.map(toRelay)]);
-      logActivity('create', 'relay', t('bulkImport.logLabel', data.length));
-    }
-    setImportModalOpen(false);
-    setImportPreview(null);
+    if (data) { setRelays((cur) => [...cur, ...data.map(toRelay)]); logActivity('create', 'relay', t('bulkImport.logLabel', data.length)); }
+    setImportModalOpen(false); setImportPreview(null);
   };
 
   const exportMonthlyPlanPDF = async () => {
     const doc = new jsPDF();
     await registerPdfFont(doc);
-    doc.setFontSize(16);
-    doc.text("Oylik tekshiruv rejasi (muddati yaqin relelar)", 14, 16);
-    doc.setFontSize(10);
-    let y = 30;
+    doc.setFontSize(16); doc.text("Oylik tekshiruv rejasi (muddati yaqin relelar)", 14, 16);
+    doc.setFontSize(10); let y = 30;
     monthlyPlanByStation.forEach((group) => {
       if (y > 270) { doc.addPage(); y = 20; }
-      doc.setFont('Roboto', 'bold');
-      doc.text(`${group.station.name} (${group.relays.length} ta)`, 14, y);
-      y += 7;
+      doc.setFont('Roboto', 'bold'); doc.text(`${group.station.name} (${group.relays.length} ta)`, 14, y); y += 7;
       doc.setFont('Roboto', 'normal');
-      group.relays.forEach((r, i) => {
-        if (y > 280) { doc.addPage(); y = 20; }
-        doc.text(`  ${i + 1}. ${r.name} (${r.num}) — ${r.nextCheck}`, 14, y);
-        y += 7;
-      });
+      group.relays.forEach((r, i) => { if (y > 280) { doc.addPage(); y = 20; } doc.text(`  ${i + 1}. ${r.name} (${r.num}) — ${r.nextCheck}`, 14, y); y += 7; });
       y += 4;
     });
     doc.save('oylik-reja.pdf');
@@ -889,271 +743,64 @@ export default function RelayDashboard() {
     const doc = new jsPDF();
     await registerPdfFont(doc);
     let y = 16;
-    doc.setFontSize(16);
-    doc.text(viewMexanikData.name, 14, y);
-    y += 10;
-    doc.setFontSize(10);
-    doc.text(`Jami tekshirilgan relelar: ${viewMexanikRelays.length} ta`, 14, y);
-    y += 10;
-
-    doc.setFont('Roboto', 'bold');
-    doc.text(`${monthLabel} oyida tekshirilgan: ${viewMexanikThisMonthRelays.length} ta`, 14, y);
-    y += 8;
+    doc.setFontSize(16); doc.text(viewMexanikData.name, 14, y); y += 10;
+    doc.setFontSize(10); doc.text(`Jami tekshirilgan relelar: ${viewMexanikRelays.length} ta`, 14, y); y += 10;
+    doc.setFont('Roboto', 'bold'); doc.text(`${monthLabel} oyida tekshirilgan: ${viewMexanikThisMonthRelays.length} ta`, 14, y); y += 8;
     doc.setFont('Roboto', 'normal');
-    if (viewMexanikThisMonthRelays.length === 0) {
-      doc.text('Bu oyda tekshirilgan rele yo\'q', 14, y);
-      y += 8;
-    } else {
-      viewMexanikThisMonthRelays.forEach((r, i) => {
-        if (y > 280) { doc.addPage(); y = 20; }
-        doc.text(`  ${i + 1}. ${r.name} (${r.num}) — ${getStationName(r.stationId)} — ${r.lastCheck}`, 14, y);
-        y += 8;
-      });
-    }
+    if (viewMexanikThisMonthRelays.length === 0) { doc.text("Bu oyda tekshirilgan rele yo'q", 14, y); y += 8; }
+    else { viewMexanikThisMonthRelays.forEach((r, i) => { if (y > 280) { doc.addPage(); y = 20; } doc.text(`  ${i + 1}. ${r.name} (${r.num}) — ${getStationName(r.stationId)} — ${r.lastCheck}`, 14, y); y += 8; }); }
     y += 4;
-
     if (y > 260) { doc.addPage(); y = 20; }
-    doc.setFont('Roboto', 'bold');
-    doc.text('Oylar bo\'yicha statistika', 14, y);
-    y += 8;
+    doc.setFont('Roboto', 'bold'); doc.text("Oylar bo'yicha statistika", 14, y); y += 8;
     doc.setFont('Roboto', 'normal');
-    viewMexanikMonthCounts.forEach((item) => {
-      if (y > 280) { doc.addPage(); y = 20; }
-      const label = item.month ? formatMonth(item.month, 'uz') : 'Sana kiritilmagan';
-      doc.text(`  ${label} — ${item.count} ta`, 14, y);
-      y += 7;
-    });
-
+    viewMexanikMonthCounts.forEach((item) => { if (y > 280) { doc.addPage(); y = 20; } const label = item.month ? formatMonth(item.month, 'uz') : 'Sana kiritilmagan'; doc.text(`  ${label} — ${item.count} ta`, 14, y); y += 7; });
     doc.save(`mexanik-${viewMexanikData.id}-${thisMonthKey}.pdf`);
   };
 
-  const filteredNav = navItems.filter((item) => (item.adminOnly ? auth?.id === 'admin' : true));
+  const openGlobalSearchRelay = (relay) => { setGlobalSearchOpen(false); setGlobalSearchQuery(''); setActiveNav('relays'); setIsDirty(false); setSelectedRelay({ ...relay }); };
+  const openGlobalSearchStation = (station) => { setGlobalSearchOpen(false); setGlobalSearchQuery(''); setActiveNav('stations'); setViewStation(station.id); };
+  const openGlobalSearchUchastka = (uchastka) => { setGlobalSearchOpen(false); setGlobalSearchQuery(''); setActiveNav('uchastkalar'); setIsDirty(false); setEditingUchastka({ id: uchastka.id, name: uchastka.name }); };
+  const openGlobalSearchMexanik = (mexanik) => { setGlobalSearchOpen(false); setGlobalSearchQuery(''); setActiveNav('mexaniklar'); setViewMexanik(mexanik.id); setViewMexanikMonth(null); };
 
-  const bgClass = 'bg-slate-950 text-slate-100';
-
+  // ── Early returns ─────────────────────────────────────────────────────────
   if (loading && !/^\/relay\/\d+$/.test(window.location.pathname)) {
-    return (
-      <div className={`${bgClass} min-h-screen flex items-center justify-center`}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
-          <p className="text-sm text-white/40">{t('common.loading')}</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen t={t} />;
   }
 
   if (publicRelay) {
-    const sc = statusConfig[publicRelay.status];
-    const sName = publicRelay.stationName || getStationName(publicRelay.stationId);
-    return (
-      <div className={`${bgClass} min-h-screen font-sans flex items-center justify-center p-4`}>
-        <div className="fixed inset-0 pointer-events-none">
-          <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-amber-500/10 blur-[120px] animate-float" />
-          <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-[120px] animate-float" style={{ animationDelay: '-3s' }} />
-        </div>
-        <div className="fixed top-4 right-4 z-10">
-          <LanguageToggle lang={lang} onCycle={cycleLang} />
-        </div>
-        <div className="relative w-full max-w-md animate-slide-up">
-          <div className="glass rounded-2xl p-6 text-center">
-            <div className="inline-flex items-center gap-2 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400 ring-1 ring-amber-500/20 mb-4">
-              RELE CONTROL
-            </div>
-            <div className={`absolute top-0 left-0 h-1.5 w-full rounded-t-2xl ${sc.bar}`}>
-              <div className={`h-full rounded-t-2xl ${sc.barFill}`} style={{ width: publicRelay.status === 'green' ? '25%' : publicRelay.status === 'yellow' ? '60%' : '100%' }} />
-            </div>
-            <div className="flex items-center justify-center gap-2 mt-2 mb-3">
-              <span className={`flex h-3 w-3 rounded-full ${sc.dot} ${publicRelay.status === 'red' ? 'animate-pulse-soft' : ''}`} />
-              <span className={`px-3 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider ${sc.lightBg} ${sc.text} ${sc.border} border`}>
-                {t(`status.${publicRelay.status}`)}
-              </span>
-            </div>
-            <h2 className="text-2xl font-black text-white">{publicRelay.name}</h2>
-            <p className="text-sm font-mono text-white/40 mt-1">№ {publicRelay.num}</p>
-            <div className="my-5 flex justify-center">
-              <div className="bg-white rounded-xl p-3">
-                <QRCodeSVG value={qrUrl(publicRelay)} size={140} level="H" />
-              </div>
-            </div>
-            <div className="space-y-2 text-sm text-left bg-white/5 rounded-xl p-4">
-              <div className="flex justify-between"><span className="text-white/40">{t('common.station')}</span><span className="text-white font-medium">{sName}</span></div>
-              {publicRelay.stativ && <div className="flex justify-between"><span className="text-white/40">{t('table.stativ')}</span><span className="text-white font-medium">{publicRelay.stativ}</span></div>}
-              {publicRelay.lastCheck && <div className="flex justify-between"><span className="text-white/40">{t('field.lastCheck')}</span><span className="text-white font-medium">{publicRelay.lastCheck}</span></div>}
-              <div className="flex justify-between"><span className="text-white/40">{t('public.check')}</span><span className="text-white font-medium">{publicRelay.nextCheck}</span></div>
-              {publicRelay.note && <div className="flex justify-between"><span className="text-white/40">{t('public.checkedBy')}</span><span className="text-white/50 text-xs italic">{publicRelay.note}</span></div>}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PublicRelayPage relay={publicRelay} lang={lang} cycleLang={cycleLang} t={t} getStationName={getStationName} />;
   }
 
   if (!auth) {
     return (
-      <div className={`${bgClass} min-h-screen font-sans transition-colors duration-300 relative overflow-hidden`}>
-        <div className="fixed inset-0 pointer-events-none">
-          <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-amber-500/10 blur-[120px] animate-float" />
-          <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-[120px] animate-float" style={{ animationDelay: '-3s' }} />
-        </div>
-        <div className="fixed top-4 right-4 z-10 flex gap-2">
-          <LanguageToggle lang={lang} onCycle={cycleLang} />
-          <ThemeToggle theme={theme} onToggle={toggleTheme} t={t} />
-        </div>
-        <div className="flex min-h-screen items-center justify-center p-4">
-          <div className="w-full max-w-5xl animate-fade-in">
-            <div className="grid gap-8 lg:grid-cols-5">
-              <div className="lg:col-span-3 hidden lg:flex flex-col justify-center space-y-6">
-                <div className="inline-flex w-fit rounded-full bg-amber-500/10 px-4 py-1.5 text-xs font-semibold text-amber-400 ring-1 ring-amber-500/20">
-                  {t('login.badge')}
-                </div>
-                <h2 className="text-5xl font-black leading-tight text-white">
-                  {t('login.heroLine1')}
-                  <span className="text-gradient block mt-1">{t('login.heroLine2')}</span>
-                  {t('login.heroLine3')}
-                </h2>
-                <p className="max-w-md text-base leading-relaxed text-white/50">
-                  {t('login.heroDesc')}
-                </p>
-                <div className="flex gap-4">
-                  <div className="rounded-2xl glass-light p-4">
-                    <p className="text-2xl font-black text-white">{relays.length}</p>
-                    <p className="text-xs text-white/40">{t('login.statTotalRelay')}</p>
-                  </div>
-                  <div className="rounded-2xl glass-light p-4">
-                    <p className="text-2xl font-black text-white">{stations.length - 1}</p>
-                    <p className="text-xs text-white/40">{t('login.statStations')}</p>
-                  </div>
-                  <div className="rounded-2xl glass-light p-4">
-                    <p className="text-2xl font-black text-white">100%</p>
-                    <p className="text-xs text-white/40">{t('login.statSecurity')}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="lg:col-span-2">
-                <div className="glass rounded-2xl p-6 animate-slide-up">
-                  <h3 className="text-xl font-bold text-white mb-1">{t('login.title')}</h3>
-                  <p className="text-sm text-white/40 mb-6">{t('login.subtitle')}</p>
-                  <form onSubmit={handleLogin} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-white/60 uppercase tracking-wider">{t('common.station')}</label>
-                      <select value={loginStation} onChange={(e) => setLoginStation(e.target.value)}
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-black outline-none transition focus:border-amber-500/50 focus:bg-white/10">
-                        <optgroup label={t('nav.stations')}>
-                          {stations.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </optgroup>
-                        {mexaniklar.filter((m) => m.username).length > 0 && (
-                          <optgroup label={t('nav.mexaniklar')}>
-                            {mexaniklar.filter((m) => m.username).map((m) => (
-                              <option key={m.id} value={`mexanik:${m.id}`}>{m.name}</option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-white/60 uppercase tracking-wider">{t('login.username')}</label>
-                      <input type="text" value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)}
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-white/60 uppercase tracking-wider">{t('login.password')}</label>
-                      <div className="relative">
-                        <input type={showLoginPassword ? 'text' : 'password'} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pr-11 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10" />
-                        <button type="button" onClick={() => setShowLoginPassword((v) => !v)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition">
-                          {showLoginPassword ? (
-                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                            </svg>
-                          ) : (
-                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    {loginError && (
-                      <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{loginError}</div>
-                    )}
-                    <button type="submit"
-                      className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
-                      {t('login.submit')}
-                    </button>
-                  </form>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <LoginPage
+        lang={lang} cycleLang={cycleLang} theme={theme} toggleTheme={toggleTheme} t={t}
+        relays={relays} stations={stations} mexaniklar={mexaniklar}
+        loginStation={loginStation} setLoginStation={setLoginStation}
+        loginUsername={loginUsername} setLoginUsername={setLoginUsername}
+        loginPassword={loginPassword} setLoginPassword={setLoginPassword}
+        showLoginPassword={showLoginPassword} setShowLoginPassword={setShowLoginPassword}
+        loginError={loginError} handleLogin={handleLogin}
+      />
     );
   }
 
   if (auth?.isMexanik) {
     return (
-      <div className={`${bgClass} min-h-screen font-sans transition-colors duration-300`}>
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-amber-500/10 blur-[120px] animate-float" />
-          <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-[120px] animate-float" style={{ animationDelay: '-3s' }} />
-        </div>
-        <div className="relative flex items-center justify-between gap-3 px-4 py-4 lg:px-6 glass border-b border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/20">
-              <span className="text-lg font-black text-slate-950">R</span>
-            </div>
-            <div>
-              <h1 className="text-sm font-bold tracking-widest text-white">RELE CONTROL</h1>
-              <p className="text-[9px] tracking-[0.2em] text-white/30 uppercase">{t('app.tagline')}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <LanguageToggle lang={lang} onCycle={cycleLang} />
-            <ThemeToggle theme={theme} onToggle={toggleTheme} t={t} />
-            <button onClick={handleLogout}
-              className="flex items-center gap-2 rounded-xl bg-white/5 px-4 py-2.5 text-xs font-semibold text-white/50 transition hover:bg-red-500/10 hover:text-red-400">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              {t('sidebar.logout')}
-            </button>
-          </div>
-        </div>
-
-        <main className="relative max-w-5xl mx-auto px-4 py-6 lg:px-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-black text-white">{viewMexanikData?.name}</h2>
-              <p className="text-sm text-white/40 mt-1">{t('mexanikView.subtitle')}</p>
-            </div>
-            {viewMexanikRelays.length > 0 && (
-              <button onClick={exportMexanikMonthPDF}
-                className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20">
-                {t('common.pdfExport')}
-              </button>
-            )}
-          </div>
-
-          <MexanikStatsPanel
-            t={t} lang={lang}
-            relays={viewMexanikRelays}
-            thisMonthRelays={viewMexanikThisMonthRelays}
-            thisMonthKey={thisMonthKey}
-            monthCounts={viewMexanikMonthCounts}
-            selectedMonth={viewMexanikMonth}
-            onSelectMonth={setViewMexanikMonth}
-            monthRelays={viewMexanikMonthRelays}
-            getStationName={getStationName}
-          />
-        </main>
-      </div>
+      <MexanikPage
+        lang={lang} cycleLang={cycleLang} theme={theme} toggleTheme={toggleTheme} t={t}
+        viewMexanikData={viewMexanikData} viewMexanikRelays={viewMexanikRelays}
+        viewMexanikThisMonthRelays={viewMexanikThisMonthRelays} thisMonthKey={thisMonthKey}
+        viewMexanikMonthCounts={viewMexanikMonthCounts} viewMexanikMonth={viewMexanikMonth} setViewMexanikMonth={setViewMexanikMonth}
+        viewMexanikMonthRelays={viewMexanikMonthRelays} getStationName={getStationName}
+        exportMexanikMonthPDF={exportMexanikMonthPDF} handleLogout={handleLogout}
+      />
     );
   }
 
+  // ── Main layout ───────────────────────────────────────────────────────────
   return (
-    <div className={`${bgClass} min-h-screen font-sans transition-colors duration-300`}>
+    <div className="bg-slate-950 text-slate-100 min-h-screen font-sans transition-colors duration-300">
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-amber-500/10 blur-[120px] animate-float" />
         <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-[120px] animate-float" style={{ animationDelay: '-3s' }} />
@@ -1161,8 +808,7 @@ export default function RelayDashboard() {
 
       {/* Mobile top bar */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-30 h-14 flex items-center gap-3 px-4 glass border-b border-white/5">
-        <button
-          onClick={() => setSidebarOpen(true)}
+        <button onClick={() => setSidebarOpen(true)}
           className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white">
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -1178,260 +824,30 @@ export default function RelayDashboard() {
 
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-slate-950/60 backdrop-blur-sm lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 z-30 bg-slate-950/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       <div className="relative flex min-h-screen">
-        <aside className={`fixed left-0 top-0 z-40 flex h-screen w-64 flex-col glass border-r border-white/5 transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
-          <div className="flex items-center gap-3 border-b border-white/5 px-5 py-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/20">
-              <span className="text-lg font-black text-slate-950">R</span>
-            </div>
-            <div>
-              <h1 className="text-sm font-bold tracking-widest text-white">RELE CONTROL</h1>
-              <p className="text-[9px] tracking-[0.2em] text-white/30 uppercase">{t('app.tagline')}</p>
-            </div>
-          </div>
-
-          {auth?.id === 'admin' && (
-            <div className="px-3 pt-3">
-              <button onClick={() => setGlobalSearchOpen(true)}
-                className="flex w-full items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-xs text-white/40 transition hover:bg-white/10 hover:text-white/60">
-                <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 114 10.5a6.5 6.5 0 0113 0z" />
-                </svg>
-                <span className="flex-1 text-left">{t('globalSearch.trigger')}</span>
-                <kbd className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px]">Ctrl K</kbd>
-              </button>
-            </div>
-          )}
-
-          <nav className="flex-1 space-y-1 p-3 overflow-y-auto">
-            {filteredNav.map((item) => {
-              const isExpanded = item.children && (activeNav === item.id || item.children.some((c) => c.id === activeNav));
-              return (
-                <div key={item.id}>
-                  <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setActiveNav(item.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); setViewMexanikMonth(null); }}
-                    className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
-                      activeNav === item.id
-                        ? 'bg-amber-500/15 text-amber-400 shadow-sm'
-                        : 'text-white/50 hover:bg-white/5 hover:text-white/80'
-                    }`}>
-                    <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                    </svg>
-                    {t(item.labelKey)}
-                    {item.children && (
-                      <svg className={`ml-auto h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    )}
-                  </button>
-                  {isExpanded && item.children && auth?.id === 'admin' && (
-                    <div className="ml-3 mt-1 space-y-0.5 border-l border-white/5 pl-2">
-                      {item.children.map((child) => (
-                        <button key={child.id} onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setActiveNav(child.id); setSidebarOpen(false); setViewStation(null); setViewMexanik(null); setViewMexanikMonth(null); }}
-                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
-                            activeNav === child.id
-                              ? 'bg-amber-500/10 text-amber-400'
-                              : 'text-white/40 hover:bg-white/5 hover:text-white/70'
-                          }`}>
-                          {t(child.labelKey)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
-
-          <div className="border-t border-white/5 p-4 space-y-3">
-            <div className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400/20 to-orange-500/20 text-amber-400 text-xs font-bold">
-                {auth.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-white truncate">{auth.name}</p>
-                <p className="text-[10px] text-white/30 truncate">{auth.id === 'admin' ? t('user.admin') : t('user.stationUser')}</p>
-              </div>
-              <LanguageToggle lang={lang} onCycle={cycleLang} className="h-8 w-8 flex-shrink-0" />
-              <ThemeToggle theme={theme} onToggle={toggleTheme} t={t} className="h-8 w-8 flex-shrink-0" />
-            </div>
-
-            <button onClick={() => { if (confirmDiscard()) handleLogout(); }}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/5 px-4 py-2.5 text-xs font-semibold text-white/50 transition hover:bg-red-500/10 hover:text-red-400">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              {t('sidebar.logout')}
-            </button>
-          </div>
-        </aside>
+        <AppSidebar
+          t={t} auth={auth} lang={lang} cycleLang={cycleLang} theme={theme} toggleTheme={toggleTheme}
+          filteredNav={filteredNav} activeNav={activeNav} setActiveNav={setActiveNav}
+          sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
+          confirmDiscard={confirmDiscard} setIsDirty={setIsDirty}
+          setViewStation={setViewStation} setViewMexanik={setViewMexanik} setViewMexanikMonth={setViewMexanikMonth}
+          setGlobalSearchOpen={setGlobalSearchOpen} handleLogout={handleLogout}
+        />
 
         <main className="lg:ml-64 flex-1 pt-14 px-4 pb-4 lg:pt-6 lg:px-6 lg:pb-6 space-y-6">
           {viewStation ? (
-            <div className="space-y-6 animate-fade-in">
-              <div className="flex items-center gap-3">
-                <button onClick={() => setViewStation(null)}
-                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white">
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <div>
-                  <h2 className="text-2xl font-black text-white">{viewStationData?.name}</h2>
-                  <p className="text-sm text-white/40 mt-1">{t('stationView.subtitle')}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-                <StatCard label={t('stat.total')} value={viewStationStats.total} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0} />
-                <StatCard label={t('stat.expired')} value={viewStationStats.expired} gradient="bg-gradient-to-br from-red-500/20 to-red-500/5" icon="🔴" delay={100} />
-                <StatCard label={t('stat.warning')} value={viewStationStats.warning} gradient="bg-gradient-to-br from-yellow-500/20 to-yellow-500/5" icon="🟡" delay={200} />
-                <StatCard label={t('stat.active')} value={viewStationStats.active} gradient="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5" icon="🟢" delay={300} />
-              </div>
-
-              {viewStationNameCounts.length > 0 && (
-                <div className="glass rounded-2xl p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-bold text-white/80">{t('stationView.byName')}</h3>
-                    {viewStationNameFilter && (
-                      <button onClick={() => setViewStationNameFilter(null)}
-                        className="text-xs font-medium text-white/50 transition hover:text-white">
-                        {t('stationView.clearFilter')} ✕
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {viewStationNameCounts.map((item) => {
-                      const isActive = viewStationNameFilter === item.name;
-                      return (
-                        <button key={item.name} type="button"
-                          onClick={() => setViewStationNameFilter(isActive ? null : item.name)}
-                          className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left transition ${
-                            isActive ? 'bg-amber-500/20 ring-1 ring-amber-500/40' : 'bg-white/5 hover:bg-white/10'
-                          }`}>
-                          <span className={`text-sm truncate ${isActive ? 'text-amber-400' : 'text-white/70'}`}>{item.name}</span>
-                          <span className="flex-shrink-0 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-xs font-bold text-amber-400">{item.count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {filteredViewStationRelays.length === 0 ? (
-                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                  <div className="text-5xl mb-4 opacity-30">🔍</div>
-                  <p className="text-lg font-semibold text-white/60">{t('stationView.empty')}</p>
-                </div>
-              ) : (
-                <div className="hidden md:block glass rounded-2xl overflow-hidden animate-slide-up">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-white/10 text-left text-xs font-medium text-white/40 uppercase tracking-wider">
-                        <th className="px-4 py-3 font-medium">{t('table.status')}</th>
-                        <th className="px-4 py-3 font-medium">{t('table.name')}</th>
-                        <th className="px-4 py-3 font-medium">{t('table.stativ')}</th>
-                        <th className="px-4 py-3 font-medium">{t('field.lastCheck')}</th>
-                        <th className="px-4 py-3 font-medium">{t('table.nextCheck')}</th>
-                        {auth?.id === 'admin' && <th className="px-4 py-3 font-medium text-right">{t('table.actions')}</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredViewStationRelays.map((relay) => {
-                        const sc = statusConfig[relay.status];
-                        return (
-                          <tr key={relay.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
-                            <td className="px-4 py-3">
-                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${sc.lightBg} ${sc.text} ${sc.border} border`}>
-                                <span className={`h-1.5 w-1.5 rounded-full ${sc.dot} ${relay.status === 'red' ? 'animate-pulse-soft' : ''}`} />
-                                {t(`status.${relay.status}`)}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="font-semibold text-white" title={relay.note || undefined}>{relay.name}</div>
-                              <div className="text-xs font-mono text-white/30">№ {relay.num}</div>
-                            </td>
-                            <td className="px-4 py-3 text-white/60">{relay.stativ || '—'}</td>
-                            <td className="px-4 py-3 text-white/60">{relay.lastCheck || '—'}</td>
-                            <td className="px-4 py-3 text-white/60">{relay.nextCheck}</td>
-                            {auth?.id === 'admin' && (
-                              <td className="px-4 py-3">
-                                <div className="flex items-center justify-end gap-2">
-                                  <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
-                                    className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                                    {t('common.edit')}
-                                  </button>
-                                  <button onClick={() => printQRCode(relay)}
-                                    className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
-                                    {t('common.qr')}
-                                  </button>
-                                  <button onClick={() => { if (confirm(t('relays.deleteConfirm', relay.name, relay.num))) handleDeleteRelay(relay.id); }}
-                                    className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
-                                    {t('common.delete')}
-                                  </button>
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <div className="md:hidden grid grid-cols-1 gap-4">
-                {filteredViewStationRelays.map((relay, idx) => {
-                  const sc = statusConfig[relay.status];
-                  return (
-                    <div key={relay.id}
-                      className="group relative overflow-hidden rounded-2xl glass hover:bg-white/[0.08] transition-all duration-500 animate-slide-up"
-                      style={{ animationDelay: `${idx * 80}ms` }}>
-                      <div className={`absolute top-0 left-0 h-1 w-full ${sc.bar}`}>
-                        <div className={`h-full ${sc.barFill}`} style={{ width: relay.status === 'green' ? '25%' : relay.status === 'yellow' ? '60%' : '100%' }} />
-                      </div>
-                      <div className="p-5">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className={`flex h-2.5 w-2.5 rounded-full ${sc.dot} ${relay.status === 'red' ? 'animate-pulse-soft' : ''}`} />
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${sc.lightBg} ${sc.text} ${sc.border} border`}>
-                            {t(`status.${relay.status}`)}
-                          </span>
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-1">{relay.name}</h3>
-                        <p className="text-xs font-mono text-white/30 mb-3">№ {relay.num}</p>
-                        <div className="space-y-1.5 text-sm text-white/50">
-                          {relay.stativ && <div>{t('table.stativ')}: {relay.stativ}</div>}
-                          {relay.lastCheck && <div>{t('field.lastCheck')}: {relay.lastCheck}</div>}
-                          <div>{relay.nextCheck}</div>
-                        </div>
-                        {auth?.id === 'admin' && (
-                          <div className="mt-4 flex gap-2 pt-4 border-t border-white/5">
-                            <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
-                              className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                              {t('common.edit')}
-                            </button>
-                            <button onClick={() => printQRCode(relay)}
-                              className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
-                              {t('common.qr')}
-                            </button>
-                            <button onClick={() => { if (confirm(t('relays.deleteConfirm', relay.name, relay.num))) handleDeleteRelay(relay.id); }}
-                              className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
-                              {t('common.delete')}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <StationDetailView
+              t={t} auth={auth}
+              viewStationData={viewStationData} viewStationStats={viewStationStats}
+              viewStationRelays={viewStationRelays} viewStationNameCounts={viewStationNameCounts}
+              viewStationNameFilter={viewStationNameFilter} setViewStationNameFilter={setViewStationNameFilter}
+              filteredViewStationRelays={filteredViewStationRelays}
+              setViewStation={setViewStation} setSelectedRelay={setSelectedRelay} setIsDirty={setIsDirty}
+              printQRCode={printQRCode} handleDeleteRelay={handleDeleteRelay}
+            />
           ) : viewMexanik ? (
             <div className="space-y-6 animate-fade-in">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1454,1459 +870,184 @@ export default function RelayDashboard() {
                   </button>
                 )}
               </div>
-
               <MexanikStatsPanel
-                t={t} lang={lang}
-                relays={viewMexanikRelays}
-                thisMonthRelays={viewMexanikThisMonthRelays}
-                thisMonthKey={thisMonthKey}
-                monthCounts={viewMexanikMonthCounts}
-                selectedMonth={viewMexanikMonth}
-                onSelectMonth={setViewMexanikMonth}
-                monthRelays={viewMexanikMonthRelays}
+                t={t} lang={lang} relays={viewMexanikRelays}
+                thisMonthRelays={viewMexanikThisMonthRelays} thisMonthKey={thisMonthKey}
+                monthCounts={viewMexanikMonthCounts} selectedMonth={viewMexanikMonth}
+                onSelectMonth={setViewMexanikMonth} monthRelays={viewMexanikMonthRelays}
                 getStationName={getStationName}
               />
             </div>
           ) : (
-          <>
-          {activeNav === 'dashboard' && (
-            <div className="space-y-6 animate-fade-in">
-              <div>
-                <h2 className="text-2xl font-black text-white">{t('nav.dashboard')}</h2>
-                <p className="text-sm text-white/40 mt-1">{t('dashboard.subtitle')}</p>
-              </div>
-              {stats.expired > 0 && (
-                <div className="flex items-start gap-3 rounded-2xl bg-red-500/10 border border-red-500/30 p-4 sm:p-5 animate-fade-in">
-                  <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-red-500/20 text-lg animate-pulse-soft">⚠️</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-red-400">{t('dashboard.alertExpiredCount', stats.expired)}</p>
-                    <p className="text-xs text-white/50 mt-0.5 truncate">
-                      {stationRelays.filter((r) => r.status === 'red').slice(0, 3).map((r) => r.name).join(', ')}
-                      {stats.expired > 3 ? t('dashboard.alertMore', stats.expired - 3) : ''} {t('dashboard.alertAction')}
-                    </p>
-                    <button onClick={() => { setActiveNav('relays'); setFilterStatus('red'); }}
-                      className="mt-3 rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/30">
-                      {t('dashboard.viewBtn')}
-                    </button>
-                  </div>
-                </div>
+            <>
+              {activeNav === 'dashboard' && (
+                <DashboardPage
+                  t={t} stats={stats} stationRelays={stationRelays}
+                  visibleStations={visibleStations} globalNameCounts={globalNameCounts}
+                  relays={relays} getRelayStatusFromDate={getRelayStatusFromDate}
+                  setActiveNav={setActiveNav} setFilterStatus={setFilterStatus}
+                  setSearchQuery={setSearchQuery} setViewStation={setViewStation}
+                />
               )}
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-                <StatCard label={t('stat.total')} value={stats.total} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0} />
-                <StatCard label={t('stat.expired')} value={stats.expired} gradient="bg-gradient-to-br from-red-500/20 to-red-500/5" icon="🔴" delay={100} />
-                <StatCard label={t('stat.warning')} value={stats.warning} gradient="bg-gradient-to-br from-yellow-500/20 to-yellow-500/5" icon="🟡" delay={200} />
-                <StatCard label={t('stat.active')} value={stats.active} gradient="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5" icon="🟢" delay={300} />
-              </div>
-              <div className="glass rounded-2xl p-5">
-                <h3 className="text-sm font-bold text-white/80 mb-4">{t('dashboard.byStation')}</h3>
-                <div className="space-y-3">
-                  {visibleStations.map((s) => {
-                    const count = relays.filter((r) => r.stationId === s.id).length;
-                    const expired = relays.filter((r) => r.stationId === s.id && getRelayStatusFromDate(r.nextCheck) === 'red').length;
-                    return (
-                      <button key={s.id} type="button" onClick={() => setViewStation(s.id)}
-                        className="flex w-full items-center gap-4 rounded-xl bg-white/5 px-4 py-3 text-left transition hover:bg-white/10">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 text-xs font-bold">
-                          {s.name.charAt(0)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{s.name}</p>
-                          <p className="text-xs text-white/40">{t('common.relayCountShort', count)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-white">{count}</p>
-                          <p className={`text-xs ${expired > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                            {expired > 0 ? t('dashboard.expiredShort', expired) : t('dashboard.allGood')}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {globalNameCounts.length > 0 && (
-                <div className="glass rounded-2xl p-5">
-                  <h3 className="text-sm font-bold text-white/80 mb-4">{t('stationView.byName')}</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {globalNameCounts.map((item) => (
-                      <button key={item.name} type="button"
-                        onClick={() => { setActiveNav('relays'); setFilterStatus('all'); setSearchQuery(item.name); }}
-                        className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2 text-left transition hover:bg-white/10">
-                        <span className="text-sm text-white/70 truncate">{item.name}</span>
-                        <span className="flex-shrink-0 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-xs font-bold text-amber-400">{item.count}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              {activeNav === 'relays' && (
+                <RelaysPage
+                  t={t} auth={auth} pagedRelays={pagedRelays} visibleRelays={visibleRelays}
+                  stations={stations} getStationName={getStationName}
+                  searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+                  filterStatus={filterStatus} setFilterStatus={setFilterStatus}
+                  adminFilterStation={adminFilterStation} setAdminFilterStation={setAdminFilterStation}
+                  selectedRelayIds={selectedRelayIds} setSelectedRelayIds={setSelectedRelayIds}
+                  setBulkEditOpen={setBulkEditOpen}
+                  relayPage={relayPage} setRelayPage={setRelayPage}
+                  relayPageCount={relayPageCount} relayPageSize={relayPageSize} setRelayPageSize={setRelayPageSize}
+                  importFileInputRef={importFileInputRef} handleRelayImportFile={handleRelayImportFile}
+                  exportToPDF={exportToPDF} exportRelaysToCSV={exportRelaysToCSV}
+                  downloadRelayImportTemplate={downloadRelayImportTemplate}
+                  setSelectedRelay={setSelectedRelay} setIsDirty={setIsDirty}
+                  printQRCode={printQRCode} handleDeleteRelay={handleDeleteRelay}
+                />
               )}
-            </div>
-          )}
-
-          {activeNav === 'stations' && auth?.id === 'admin' && (
-            <div className="space-y-4 animate-fade-in">
-              <div>
-                <h2 className="text-2xl font-black text-white">{t('nav.stations')}</h2>
-                <p className="text-sm text-white/40 mt-1">{t('station.subtitle')}</p>
-              </div>
-              <div className="space-y-3">
-                {stations.filter((s) => s.id !== 'admin').map((s) => {
-                  const count = relays.filter((r) => r.stationId === s.id).length;
-                  return (
-                    <div key={s.id} className="glass rounded-2xl p-4 flex items-center gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400/20 to-orange-500/20 text-amber-400 font-bold">
-                        {s.name.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-white">{s.name}</p>
-                        <p className="text-xs text-white/40">{t('station.loginLabel')} <span className="font-mono text-white/50">{s.username}</span> &middot; {t('common.relayCountShort', count)} &middot; {t('station.uchastkaLabel')} {getUchastkaName(s.uchastka_id)}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => { setIsDirty(false); setEditingStation({ _originalId: s.id, name: s.name, username: s.username, password: '', uchastka_id: s.uchastka_id || '' }); }}
-                          className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                          {t('common.edit')}
-                        </button>
-                        <button onClick={() => setDeleteStationId(s.id)}
-                          className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
-                          {t('common.delete')}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {activeNav === 'relays' && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <h2 className="text-2xl font-black text-white">{t('nav.relays')}</h2>
-                  <p className="text-sm text-white/40 mt-1">{t('relays.foundCount', visibleRelays.length)}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button onClick={exportToPDF}
-                    className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20">
-                    {t('common.pdfExport')}
-                  </button>
-                  <button onClick={exportRelaysToCSV}
-                    className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-500/20">
-                    {t('bulkImport.csvExport')}
-                  </button>
-                  {auth?.id === 'admin' && (
-                    <>
-                      <button onClick={downloadRelayImportTemplate}
-                        className="rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/20 hover:text-white">
-                        {t('bulkImport.template')}
-                      </button>
-                      <button onClick={() => importFileInputRef.current?.click()}
-                        className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-2 text-xs font-semibold text-amber-400 transition hover:bg-amber-500/20">
-                        {t('bulkImport.importButton')}
-                      </button>
-                      <input ref={importFileInputRef} type="file" accept=".csv,text/csv" className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          e.target.value = '';
-                          if (file) handleRelayImportFile(file);
-                        }} />
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="glass rounded-2xl p-4">
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="relative flex-1">
-                    <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    <input type="text" value={searchQuery} placeholder={t('relays.searchPlaceholder')} className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10"
-                      onChange={(e) => setSearchQuery(e.target.value)} />
-                  </div>
-                  <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50">
-                    <option value="all" className="bg-neutral-900 text-white">{t('filter.allStatus')}</option>
-                    <option value="red" className="bg-neutral-900 text-white">{t('status.red')}</option>
-                    <option value="yellow" className="bg-neutral-900 text-white">{t('status.yellow')}</option>
-                    <option value="green" className="bg-neutral-900 text-white">{t('status.green')}</option>
-                  </select>
-                  {auth?.id === 'admin' && (
-                    <select value={adminFilterStation} onChange={(e) => setAdminFilterStation(e.target.value)}
-                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50">
-                      <option value="all" className="bg-neutral-900 text-white">{t('filter.allStations')}</option>
-                      {stations.filter((s) => s.id !== 'admin').map((s) => <option key={s.id} value={s.id} className="bg-neutral-900 text-white">{s.name}</option>)}
-                    </select>
-                  )}
-                </div>
-              </div>
-
-              {auth?.id === 'admin' && selectedRelayIds.length > 0 && (
-                <div className="glass rounded-2xl p-4 flex items-center justify-between gap-3 animate-fade-in">
-                  <p className="text-sm text-white/70">{t('bulkEdit.selectedCount', selectedRelayIds.length)}</p>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setBulkEditOpen(true)}
-                      className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-xs font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25">
-                      {t('bulkEdit.editButton')}
-                    </button>
-                    <button onClick={() => setSelectedRelayIds([])}
-                      className="rounded-xl bg-white/10 px-4 py-2 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                      {t('common.cancel')}
-                    </button>
-                  </div>
-                </div>
+              {activeNav === 'add-relay' && auth?.id === 'admin' && (
+                <AddRelayPage
+                  t={t} newRelay={newRelay} setNewRelay={setNewRelay}
+                  stations={stations} mexaniklar={mexaniklar}
+                  handleAddRelay={handleAddRelay} confirmDiscard={confirmDiscard}
+                  setIsDirty={setIsDirty} setActiveNav={setActiveNav}
+                />
               )}
-
-              <div className="hidden md:block glass rounded-2xl overflow-hidden animate-slide-up">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-white/10 text-left text-xs font-medium text-white/40 uppercase tracking-wider">
-                      {auth?.id === 'admin' && (
-                        <th className="px-4 py-3 font-medium w-8">
-                          <input type="checkbox"
-                            checked={pagedRelays.length > 0 && pagedRelays.every((r) => selectedRelayIds.includes(r.id))}
-                            onChange={(e) => {
-                              const pageIds = pagedRelays.map((r) => r.id);
-                              setSelectedRelayIds((cur) => e.target.checked
-                                ? Array.from(new Set([...cur, ...pageIds]))
-                                : cur.filter((id) => !pageIds.includes(id)));
-                            }}
-                            className="rounded border-white/20 bg-white/5" />
-                        </th>
-                      )}
-                      <th className="px-4 py-3 font-medium">{t('table.status')}</th>
-                      <th className="px-4 py-3 font-medium">{t('table.name')}</th>
-                      <th className="px-4 py-3 font-medium">{t('common.station')}</th>
-                      <th className="px-4 py-3 font-medium">{t('table.stativ')}</th>
-                      <th className="px-4 py-3 font-medium">{t('field.lastCheck')}</th>
-                      <th className="px-4 py-3 font-medium">{t('table.nextCheck')}</th>
-                      {auth?.id === 'admin' && <th className="px-4 py-3 font-medium text-right">{t('table.actions')}</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagedRelays.map((relay) => {
-                      const sc = statusConfig[relay.status];
-                      return (
-                        <tr key={relay.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
-                          {auth?.id === 'admin' && (
-                            <td className="px-4 py-3">
-                              <input type="checkbox" checked={selectedRelayIds.includes(relay.id)}
-                                onChange={(e) => setSelectedRelayIds((cur) => e.target.checked
-                                  ? [...cur, relay.id]
-                                  : cur.filter((id) => id !== relay.id))}
-                                className="rounded border-white/20 bg-white/5" />
-                            </td>
-                          )}
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${sc.lightBg} ${sc.text} ${sc.border} border`}>
-                              <span className={`h-1.5 w-1.5 rounded-full ${sc.dot} ${relay.status === 'red' ? 'animate-pulse-soft' : ''}`} />
-                              {t(`status.${relay.status}`)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="font-semibold text-white" title={relay.note || undefined}>{relay.name}</div>
-                            <div className="text-xs font-mono text-white/30">№ {relay.num}</div>
-                          </td>
-                          <td className="px-4 py-3 text-white/60">{getStationName(relay.stationId)}</td>
-                          <td className="px-4 py-3 text-white/60">{relay.stativ || '—'}</td>
-                          <td className="px-4 py-3 text-white/60">{relay.lastCheck || '—'}</td>
-                          <td className="px-4 py-3 text-white/60">{relay.nextCheck}</td>
-                          {auth?.id === 'admin' && (
-                            <td className="px-4 py-3">
-                              <div className="flex items-center justify-end gap-2">
-                                <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
-                                  className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                                  {t('common.edit')}
-                                </button>
-                                <button onClick={() => printQRCode(relay)}
-                                  className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
-                                  {t('common.qr')}
-                                </button>
-                                <button onClick={() => { if (confirm(t('relays.deleteConfirm', relay.name, relay.num))) handleDeleteRelay(relay.id); }}
-                                  className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
-                                  {t('common.delete')}
-                                </button>
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="md:hidden grid grid-cols-1 gap-4">
-                {pagedRelays.map((relay, idx) => {
-                  const sc = statusConfig[relay.status];
-                  return (
-                    <div key={relay.id}
-                      className="group relative overflow-hidden rounded-2xl glass hover:bg-white/[0.08] transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl animate-slide-up"
-                      style={{ animationDelay: `${idx * 80}ms` }}>
-                      <div className={`absolute top-0 left-0 h-1 w-full ${sc.bar}`}>
-                        <div className={`h-full ${sc.barFill} transition-all duration-700`} style={{ width: relay.status === 'green' ? '25%' : relay.status === 'yellow' ? '60%' : '100%' }} />
-                      </div>
-                      <div className="p-5">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className={`flex h-2.5 w-2.5 rounded-full ${sc.dot} ${relay.status === 'red' ? 'animate-pulse-soft' : ''}`} />
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${sc.lightBg} ${sc.text} ${sc.border} border`}>
-                              {t(`status.${relay.status}`)}
-                            </span>
-                          </div>
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-1">{relay.name}</h3>
-                        <p className="text-xs font-mono text-white/30 mb-3">№ {relay.num}</p>
-                        <div className="text-xs text-white/40 mb-3">{getStationName(relay.stationId)}</div>
-                        <div className="space-y-1.5 text-sm">
-                          {relay.stativ && (
-                            <div className="flex items-center gap-2 text-white/50">
-                              <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" /></svg>
-                              <span className="text-white/70">{t('table.stativ')}: {relay.stativ}</span>
-                            </div>
-                          )}
-                          {relay.lastCheck && (
-                            <div className="flex items-center gap-2 text-white/50">
-                              <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                              <span className="text-white/70">{t('field.lastCheck')}: {relay.lastCheck}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 text-white/50">
-                            <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                            <span className="text-white/70">{relay.nextCheck}</span>
-                          </div>
-                          {relay.note && (
-                            <div className="flex items-center gap-2 text-white/50">
-                              <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
-                              <span className="text-white/50 italic text-xs">{relay.note}</span>
-                            </div>
-                          )}
-                        </div>
-                        {auth?.id === 'admin' && (
-                          <div className="mt-4 flex items-center justify-between pt-4 border-t border-white/5">
-                            <div className="flex gap-2">
-                              <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
-                                className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                                {t('common.edit')}
-                              </button>
-                              <button onClick={() => printQRCode(relay)}
-                                className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
-                                {t('common.qrDownload')}
-                              </button>
-                              <button onClick={() => { if (confirm(t('relays.deleteConfirm', relay.name, relay.num))) handleDeleteRelay(relay.id); }}
-                                className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
-                                {t('common.delete')}
-                              </button>
-                            </div>
-                            <div id={`qr-${relay.id}`} className="bg-white rounded-lg p-1.5 transition-transform group-hover:scale-110">
-                              <QRCodeSVG value={qrUrl(relay)} size={44} level="H" />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {visibleRelays.length === 0 && (
-                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                  <div className="text-5xl mb-4 opacity-30">🔍</div>
-                  <p className="text-lg font-semibold text-white/60">{t('relays.empty')}</p>
-                  <p className="text-sm text-white/30 mt-1">{t('relays.emptyHint')}</p>
-                </div>
+              {activeNav === 'stations' && auth?.id === 'admin' && (
+                <StationsPage
+                  t={t} stations={stations} relays={relays}
+                  setEditingStation={setEditingStation} setDeleteStationId={setDeleteStationId}
+                  setIsDirty={setIsDirty} getUchastkaName={getUchastkaName}
+                />
               )}
-
-              {visibleRelays.length > 0 && (
-                <div className="glass rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-xs text-white/40">
-                    <span>
-                      {visibleRelays.length === 0 ? 0 : (relayPage - 1) * relayPageSize + 1}
-                      {'–'}
-                      {Math.min(relayPage * relayPageSize, visibleRelays.length)} / {visibleRelays.length}
-                    </span>
-                    <select value={relayPageSize} onChange={(e) => setRelayPageSize(Number(e.target.value))}
-                      className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white outline-none transition focus:border-amber-500/50">
-                      {[10, 20, 50, 100].map((n) => <option key={n} value={n} className="bg-neutral-900 text-white">{t('pagination.perPage', n)}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setRelayPage((p) => Math.max(1, p - 1))} disabled={relayPage <= 1}
-                      className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
-                      {t('pagination.prev')}
-                    </button>
-                    <span className="text-xs text-white/50">{relayPage} / {relayPageCount}</span>
-                    <button onClick={() => setRelayPage((p) => Math.min(relayPageCount, p + 1))} disabled={relayPage >= relayPageCount}
-                      className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
-                      {t('pagination.next')}
-                    </button>
-                  </div>
-                </div>
+              {activeNav === 'add-station' && auth?.id === 'admin' && (
+                <AddStationPage
+                  t={t} newStation={newStation} setNewStation={setNewStation}
+                  uchastkalar={uchastkalar} handleAddStation={handleAddStation}
+                  stationFormError={stationFormError} confirmDiscard={confirmDiscard}
+                  setIsDirty={setIsDirty} setStationFormError={setStationFormError} setActiveNav={setActiveNav}
+                />
               )}
-            </div>
-          )}
-
-          {activeNav === 'add-relay' && auth?.id === 'admin' && (
-            <div className="glass rounded-2xl p-6 animate-slide-up max-w-3xl" onInput={() => setIsDirty(true)}>
-              <h2 className="text-lg font-bold text-white">{t('addRelay.title')}</h2>
-              <p className="text-sm text-white/40 mb-5">{t('addRelay.subtitle')}</p>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">{t('common.station')}</label>
-                  <select value={newRelay.stationId} onChange={(e) => setNewRelay({ ...newRelay, stationId: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50">
-                    {stations.filter((s) => s.id !== 'admin').map((s) => <option key={s.id} value={s.id} className="bg-neutral-900 text-white">{s.name}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">{t('field.relayName')}</label>
-                  <input value={newRelay.name} onChange={(e) => setNewRelay({ ...newRelay, name: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">{t('field.factoryNum')}</label>
-                  <input value={newRelay.num} onChange={(e) => setNewRelay({ ...newRelay, num: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">{t('field.stativNum')}</label>
-                  <input value={newRelay.stativ} onChange={(e) => setNewRelay({ ...newRelay, stativ: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">{t('field.lastCheck')}</label>
-                  <input type="date" value={newRelay.lastCheck} onChange={(e) => setNewRelay({ ...newRelay, lastCheck: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">{t('field.nextCheck')}</label>
-                  <input type="date" value={newRelay.nextCheck} onChange={(e) => setNewRelay({ ...newRelay, nextCheck: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-                </div>
-              </div>
-              <div className="mt-4 space-y-1.5">
-                <label className="text-xs font-medium text-white/60">{t('field.checkedBy')}</label>
-                <MechanicSelect mexaniklar={mexaniklar} value={newRelay.note} onChange={(v) => { setNewRelay({ ...newRelay, note: v }); setIsDirty(true); }} t={t} />
-              </div>
-              <div className="mt-5 flex gap-3">
-                <button onClick={handleAddRelay}
-                  className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
-                  {t('addRelay.submit')}
-                </button>
-                <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setActiveNav('relays'); }}
-                  className="rounded-xl bg-white/10 px-6 py-3 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeNav === 'monthly-plan' && auth?.id === 'admin' && (
-            <div className="space-y-6 animate-fade-in">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <h2 className="text-2xl font-black text-white">{t('nav.monthlyPlan')}</h2>
-                  <p className="text-sm text-white/40 mt-1">{t('monthlyPlan.subtitle')}</p>
-                </div>
-                {monthlyPlanByStation.length > 0 && (
-                  <button onClick={exportMonthlyPlanPDF}
-                    className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20">
-                    {t('common.pdfExport')}
-                  </button>
-                )}
-              </div>
-
-              {monthlyPlanByStation.length === 0 ? (
-                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                  <div className="text-5xl mb-4 opacity-30">✅</div>
-                  <p className="text-lg font-semibold text-white/60">{t('monthlyPlan.empty')}</p>
-                </div>
-              ) : (
-                <>
-                  <div className="relative">
-                    <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    <input type="text" value={monthlyPlanSearch} placeholder={t('common.searchPlaceholder')}
-                      onChange={(e) => setMonthlyPlanSearch(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10" />
-                  </div>
-                  {visibleMonthlyPlan.length === 0 ? (
-                    <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                      <p className="text-sm text-white/40">{t('common.noSearchResults')}</p>
-                    </div>
-                  ) : (
-                visibleMonthlyPlan.map((group) => (
-                  <div key={group.station.id} className="glass rounded-2xl p-5 animate-slide-up">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-bold text-white/80">{group.station.name}</h3>
-                      <span className="rounded-md bg-yellow-500/10 border border-yellow-500/30 px-2 py-0.5 text-xs font-bold text-yellow-400">
-                        {t('monthlyPlan.countShort', group.relays.length)}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {group.relays.map((relay) => (
-                        <div key={relay.id} className="flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2.5">
-                          <span className="flex h-2 w-2 flex-shrink-0 rounded-full bg-yellow-400" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-white truncate">{relay.name}</p>
-                            <p className="text-[10px] font-mono text-white/30">№ {relay.num}{relay.stativ ? ` · ${t('table.stativ')}: ${relay.stativ}` : ''}</p>
-                          </div>
-                          <p className="text-xs text-white/40 flex-shrink-0">{relay.nextCheck}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
-                  )}
-                </>
+              {activeNav === 'monthly-plan' && auth?.id === 'admin' && (
+                <MonthlyPlanPage
+                  t={t} monthlyPlanByStation={monthlyPlanByStation}
+                  visibleMonthlyPlan={visibleMonthlyPlan}
+                  monthlyPlanSearch={monthlyPlanSearch} setMonthlyPlanSearch={setMonthlyPlanSearch}
+                  exportMonthlyPlanPDF={exportMonthlyPlanPDF}
+                />
               )}
-            </div>
-          )}
-
-          {activeNav === 'add-station' && auth?.id === 'admin' && (
-            <div className="glass rounded-2xl p-6 animate-slide-up max-w-2xl" onInput={() => setIsDirty(true)}>
-              <h2 className="text-lg font-bold text-white">{t('addStation.title')}</h2>
-              <p className="text-sm text-white/40 mb-5">{t('addStation.subtitle')}</p>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">{t('field.stationName')}</label>
-                  <input value={newStation.name} onChange={(e) => setNewStation({ ...newStation, name: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">{t('field.username')}</label>
-                  <input value={newStation.username} onChange={(e) => setNewStation({ ...newStation, username: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">{t('field.password')}</label>
-                  <input type="password" value={newStation.password} onChange={(e) => setNewStation({ ...newStation, password: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-white/60">{t('field.uchastka')}</label>
-                  <select value={newStation.uchastkaId} onChange={(e) => setNewStation({ ...newStation, uchastkaId: e.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50">
-                    <option value="" className="bg-neutral-900 text-white">{t('common.notSelected')}</option>
-                    {uchastkalar.map((u) => <option key={u.id} value={u.id} className="bg-neutral-900 text-white">{u.name}</option>)}
-                  </select>
-                </div>
-              </div>
-              {stationFormError && (
-                <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{stationFormError}</div>
+              {activeNav === 'uchastkalar' && auth?.id === 'admin' && (
+                <UchastkalarPage
+                  t={t} uchastkalar={uchastkalar} visibleUchastkalar={visibleUchastkalar}
+                  uchastkaSearch={uchastkaSearch} setUchastkaSearch={setUchastkaSearch}
+                  stations={stations} relays={relays}
+                  setEditingUchastka={setEditingUchastka} setDeleteUchastkaId={setDeleteUchastkaId} setIsDirty={setIsDirty}
+                />
               )}
-              <div className="mt-5 flex gap-3">
-                <button onClick={handleAddStation}
-                  className="rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 px-6 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98]">
-                  {t('addStation.submit')}
-                </button>
-                <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setStationFormError(''); setActiveNav('relays'); }}
-                  className="rounded-xl bg-white/10 px-6 py-3 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeNav === 'uchastkalar' && auth?.id === 'admin' && (
-            <div className="space-y-4 animate-fade-in">
-              <div>
-                <h2 className="text-2xl font-black text-white">{t('nav.uchastkalar')}</h2>
-                <p className="text-sm text-white/40 mt-1">{t('uchastkalar.subtitle')}</p>
-              </div>
-
-              {uchastkalar.length === 0 ? (
-                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                  <p className="text-sm text-white/40">{t('uchastkalar.empty')}</p>
-                </div>
-              ) : (
-                <>
-                  <div className="relative">
-                    <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    <input type="text" value={uchastkaSearch} placeholder={t('common.searchPlaceholder')}
-                      onChange={(e) => setUchastkaSearch(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10" />
-                  </div>
-                  {visibleUchastkalar.length === 0 ? (
-                    <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                      <p className="text-sm text-white/40">{t('common.noSearchResults')}</p>
-                    </div>
-                  ) : (
-                <>
-                  <div className="hidden md:block glass rounded-2xl overflow-hidden animate-slide-up">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-white/10 text-left text-xs font-medium text-white/40 uppercase tracking-wider">
-                          <th className="px-4 py-3 font-medium">{t('table.id')}</th>
-                          <th className="px-4 py-3 font-medium">{t('table.uchastka')}</th>
-                          <th className="px-4 py-3 font-medium">{t('table.stationCount')}</th>
-                          <th className="px-4 py-3 font-medium">{t('table.relayCount')}</th>
-                          <th className="px-4 py-3 font-medium text-right">{t('table.actions')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visibleUchastkalar.map((u, idx) => {
-                          const stationIds = stations.filter((s) => s.uchastka_id === u.id).map((s) => s.id);
-                          const relayCount = relays.filter((r) => stationIds.includes(r.stationId)).length;
-                          return (
-                            <tr key={u.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
-                              <td className="px-4 py-3 text-white/60">{idx + 1}</td>
-                              <td className="px-4 py-3 font-semibold text-white">{u.name}</td>
-                              <td className="px-4 py-3 text-white/60">{stationIds.length}</td>
-                              <td className="px-4 py-3 text-white/60">{relayCount}</td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center justify-end gap-2">
-                                  <button onClick={() => { setIsDirty(false); setEditingUchastka({ id: u.id, name: u.name }); }}
-                                    className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                                    {t('common.edit')}
-                                  </button>
-                                  <button onClick={() => setDeleteUchastkaId(u.id)}
-                                    className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
-                                    {t('common.delete')}
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="md:hidden space-y-3">
-                    {visibleUchastkalar.map((u) => {
-                      const stationIds = stations.filter((s) => s.uchastka_id === u.id).map((s) => s.id);
-                      const relayCount = relays.filter((r) => stationIds.includes(r.stationId)).length;
-                      return (
-                        <div key={u.id} className="glass rounded-2xl p-4 flex items-center gap-4">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400/20 to-sky-500/20 text-cyan-400 font-bold">
-                            {u.name.charAt(0)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-white">{u.name}</p>
-                            <p className="text-xs text-white/40">{t('table.stationCount')}: {stationIds.length} &middot; {t('common.relayCountShort', relayCount)}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => { setIsDirty(false); setEditingUchastka({ id: u.id, name: u.name }); }}
-                              className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                              {t('common.edit')}
-                            </button>
-                            <button onClick={() => setDeleteUchastkaId(u.id)}
-                              className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
-                              {t('common.delete')}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-                  )}
-                </>
+              {activeNav === 'add-uchastka' && auth?.id === 'admin' && (
+                <AddUchastkaPage
+                  t={t} newUchastka={newUchastka} setNewUchastka={setNewUchastka}
+                  handleAddUchastka={handleAddUchastka} uchastkaFormError={uchastkaFormError}
+                  confirmDiscard={confirmDiscard} setIsDirty={setIsDirty}
+                  setUchastkaFormError={setUchastkaFormError} setActiveNav={setActiveNav}
+                />
               )}
-            </div>
-          )}
-
-          {activeNav === 'add-uchastka' && auth?.id === 'admin' && (
-            <div className="glass rounded-2xl p-6 animate-slide-up max-w-md" onInput={() => setIsDirty(true)}>
-              <h2 className="text-lg font-bold text-white">{t('addUchastka.title')}</h2>
-              <p className="text-sm text-white/40 mb-5">{t('addUchastka.subtitle')}</p>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-white/60">{t('field.uchastkaName')}</label>
-                <input value={newUchastka.name} onChange={(e) => setNewUchastka({ name: e.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
-              </div>
-              {uchastkaFormError && (
-                <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{uchastkaFormError}</div>
+              {activeNav === 'mexaniklar' && auth?.id === 'admin' && (
+                <MexaniklarPage
+                  t={t} mexaniklar={mexaniklar} visibleMexaniklar={visibleMexaniklar}
+                  mexanikSearch={mexanikSearch} setMexanikSearch={setMexanikSearch}
+                  setEditingMexanik={setEditingMexanik} setDeleteMexanikId={setDeleteMexanikId}
+                  setViewMexanik={setViewMexanik} setViewMexanikMonth={setViewMexanikMonth} setIsDirty={setIsDirty}
+                />
               )}
-              <div className="mt-5 flex gap-3">
-                <button onClick={handleAddUchastka}
-                  className="rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 px-6 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98]">
-                  {t('addUchastka.submit')}
-                </button>
-                <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setUchastkaFormError(''); setActiveNav('uchastkalar'); }}
-                  className="rounded-xl bg-white/10 px-6 py-3 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeNav === 'mexaniklar' && auth?.id === 'admin' && (
-            <div className="space-y-4 animate-fade-in">
-              <div>
-                <h2 className="text-2xl font-black text-white">{t('nav.mexaniklar')}</h2>
-                <p className="text-sm text-white/40 mt-1">{t('mexaniklar.subtitle')}</p>
-              </div>
-
-              {mexaniklar.length === 0 ? (
-                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                  <p className="text-sm text-white/40">{t('mexaniklar.empty')}</p>
-                </div>
-              ) : (
-                <>
-                  <div className="relative">
-                    <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    <input type="text" value={mexanikSearch} placeholder={t('common.searchPlaceholder')}
-                      onChange={(e) => setMexanikSearch(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10" />
-                  </div>
-                  {visibleMexaniklar.length === 0 ? (
-                    <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                      <p className="text-sm text-white/40">{t('common.noSearchResults')}</p>
-                    </div>
-                  ) : (
-                <>
-                  <div className="hidden md:block glass rounded-2xl overflow-hidden animate-slide-up">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-white/10 text-left text-xs font-medium text-white/40 uppercase tracking-wider">
-                          <th className="px-4 py-3 font-medium">{t('table.id')}</th>
-                          <th className="px-4 py-3 font-medium">{t('table.mechanicName')}</th>
-                          <th className="px-4 py-3 font-medium text-right">{t('table.actions')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visibleMexaniklar.map((m, idx) => (
-                          <tr key={m.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
-                            <td className="px-4 py-3 text-white/60">{idx + 1}</td>
-                            <td className="px-4 py-3">
-                              <button onClick={() => { setViewMexanik(m.id); setViewMexanikMonth(null); }}
-                                className="font-semibold text-white hover:text-amber-400 transition">
-                                {m.name}
-                              </button>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center justify-end gap-2">
-                                <button onClick={() => { setIsDirty(false); setEditingMexanik({ id: m.id, name: m.name, username: m.username || '', password: '' }); }}
-                                  className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                                  {t('common.edit')}
-                                </button>
-                                <button onClick={() => setDeleteMexanikId(m.id)}
-                                  className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
-                                  {t('common.delete')}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="md:hidden space-y-3">
-                    {visibleMexaniklar.map((m) => (
-                      <div key={m.id} className="glass rounded-2xl p-4 flex items-center gap-4">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400/20 to-sky-500/20 text-cyan-400 font-bold">
-                          {m.name.charAt(0)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <button onClick={() => { setViewMexanik(m.id); setViewMexanikMonth(null); }}
-                            className="text-sm font-bold text-white hover:text-amber-400 transition">
-                            {m.name}
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => { setIsDirty(false); setEditingMexanik({ id: m.id, name: m.name, username: m.username || '', password: '' }); }}
-                            className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                            {t('common.edit')}
-                          </button>
-                          <button onClick={() => setDeleteMexanikId(m.id)}
-                            className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
-                            {t('common.delete')}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-                  )}
-                </>
+              {activeNav === 'add-mexanik' && auth?.id === 'admin' && (
+                <AddMexanikPage
+                  t={t} newMexanik={newMexanik} setNewMexanik={setNewMexanik}
+                  handleAddMexanik={handleAddMexanik} mexanikFormError={mexanikFormError}
+                  confirmDiscard={confirmDiscard} setIsDirty={setIsDirty}
+                  setMexanikFormError={setMexanikFormError} setActiveNav={setActiveNav}
+                />
               )}
-            </div>
-          )}
-
-          {activeNav === 'add-mexanik' && auth?.id === 'admin' && (
-            <div className="glass rounded-2xl p-6 animate-slide-up max-w-md" onInput={() => setIsDirty(true)}>
-              <h2 className="text-lg font-bold text-white">{t('addMexanik.title')}</h2>
-              <p className="text-sm text-white/40 mb-5">{t('addMexanik.subtitle')}</p>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-white/60">{t('field.mechanicName')}</label>
-                <input value={newMexanik.name} onChange={(e) => setNewMexanik({ ...newMexanik, name: e.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
-              </div>
-              <div className="space-y-1.5 mt-4">
-                <label className="text-xs font-medium text-white/60">{t('field.username')}</label>
-                <input value={newMexanik.username} onChange={(e) => setNewMexanik({ ...newMexanik, username: e.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
-                <p className="text-[10px] text-white/30">{t('addMexanik.loginHint')}</p>
-              </div>
-              <div className="space-y-1.5 mt-4">
-                <label className="text-xs font-medium text-white/60">{t('field.password')}</label>
-                <input type="password" value={newMexanik.password} onChange={(e) => setNewMexanik({ ...newMexanik, password: e.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500/50" />
-              </div>
-              {mexanikFormError && (
-                <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{mexanikFormError}</div>
+              {activeNav === 'activity-log' && auth?.id === 'admin' && (
+                <ActivityLogPage t={t} lang={lang} activityLog={activityLog} activityLogLoading={activityLogLoading} />
               )}
-              <div className="mt-5 flex gap-3">
-                <button onClick={handleAddMexanik}
-                  className="rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 px-6 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98]">
-                  {t('addMexanik.submit')}
-                </button>
-                <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setMexanikFormError(''); setActiveNav('mexaniklar'); }}
-                  className="rounded-xl bg-white/10 px-6 py-3 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeNav === 'activity-log' && auth?.id === 'admin' && (
-            <div className="space-y-4 animate-fade-in">
-              <div>
-                <h2 className="text-2xl font-black text-white">{t('nav.activityLog')}</h2>
-                <p className="text-sm text-white/40 mt-1">{t('activityLog.subtitle')}</p>
-              </div>
-              {activityLogLoading ? (
-                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                  <div className="h-8 w-8 mx-auto rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin" />
-                </div>
-              ) : activityLog.length === 0 ? (
-                <div className="glass rounded-2xl p-12 text-center animate-fade-in">
-                  <p className="text-sm text-white/40">{t('activityLog.empty')}</p>
-                </div>
-              ) : (
-                <div className="glass rounded-2xl overflow-hidden animate-slide-up divide-y divide-white/5">
-                  {activityLog.map((entry) => {
-                    const actionColor = entry.action === 'create'
-                      ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
-                      : entry.action === 'delete'
-                        ? 'text-red-400 bg-red-500/10 border-red-500/30'
-                        : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
-                    let diffChanges = null;
-                    if (entry.details) {
-                      try {
-                        const parsed = JSON.parse(entry.details);
-                        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0] && typeof parsed[0] === 'object' && 'field' in parsed[0]) {
-                          diffChanges = parsed;
-                        }
-                      } catch {}
-                    }
-                    return (
-                      <div key={entry.id} className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className={`flex-shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${actionColor}`}>
-                            {t(`activityLog.action.${entry.action}`)}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm text-white truncate">
-                              <span className="font-semibold">{entry.actor_name}</span>
-                              {' — '}{t(`activityLog.entity.${entry.entity_type}`)}: {entry.entity_label}
-                            </p>
-                          </div>
-                          <p className="text-xs text-white/40 flex-shrink-0">
-                            {new Date(entry.created_at).toLocaleString(lang === 'uz' ? 'uz-UZ' : lang === 'ru' ? 'ru-RU' : 'en-US')}
-                          </p>
-                        </div>
-                        {diffChanges && (
-                          <div className="mt-2 ml-1 space-y-1 border-l-2 border-white/10 pl-3">
-                            {diffChanges.map((c, i) => {
-                              const labelKey = RELAY_DIFF_FIELDS.find((f) => f.key === c.field)?.labelKey;
-                              return (
-                                <p key={i} className="text-xs">
-                                  <span className="text-white/40">{labelKey ? t(labelKey) : c.field}: </span>
-                                  {'before' in c ? (
-                                    <>
-                                      <span className="text-red-400/70 line-through">{c.before || '—'}</span>
-                                      <span className="text-white/30"> → </span>
-                                      <span className="text-emerald-400">{c.after || '—'}</span>
-                                    </>
-                                  ) : (
-                                    <span className="text-emerald-400">{c.after || '—'}</span>
-                                  )}
-                                </p>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+              {activeNav === 'settings' && auth?.id === 'admin' && (
+                <SettingsPage
+                  t={t} publicUrl={publicUrl} publicUrlInput={publicUrlInput}
+                  setPublicUrlInput={setPublicUrlInput} setPublicUrl={setPublicUrl}
+                />
               )}
-            </div>
-          )}
-
-          {activeNav === 'settings' && auth?.id === 'admin' && (
-            <div className="space-y-4 animate-fade-in max-w-2xl">
-              <div>
-                <h2 className="text-2xl font-black text-white">{t('nav.settings')}</h2>
-                <p className="text-sm text-white/40 mt-1">{t('settings.subtitle')}</p>
-              </div>
-              <div className="glass rounded-2xl p-6 space-y-4">
-                <div>
-                  <h3 className="text-sm font-bold text-white mb-1">{t('settings.qrUrlHeading')}</h3>
-                  <p className="text-xs text-white/40 mb-4">
-                    {t('settings.qrUrlDescPre')} <span className="font-mono text-white/60">{window.location.origin}</span> {t('settings.qrUrlDescPost')}
-                  </p>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-white/60">{t('field.siteUrl')}</label>
-                    <input
-                      value={publicUrlInput}
-                      onChange={(e) => setPublicUrlInput(e.target.value)}
-                      placeholder={t('settings.urlPlaceholder')}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10 font-mono"
-                    />
-                    <p className="text-[11px] text-white/30">{t('settings.wifiHint')}</p>
-                  </div>
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={() => {
-                        const url = publicUrlInput.trim().replace(/\/$/, '');
-                        localStorage.setItem('rc_public_url', url);
-                        setPublicUrl(url);
-                        setPublicUrlInput(url);
-                      }}
-                      className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
-                      {t('common.save')}
-                    </button>
-                    {publicUrl && (
-                      <button
-                        onClick={() => {
-                          localStorage.removeItem('rc_public_url');
-                          setPublicUrl('');
-                          setPublicUrlInput('');
-                        }}
-                        className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/50 transition hover:bg-white/20 hover:text-white">
-                        {t('common.clear')}
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {publicUrl && (
-                  <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
-                    {t('settings.currentUrl')} <span className="font-mono">{publicUrl}/relay/[id]</span>
-                  </div>
-                )}
-                <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-xs text-amber-400 space-y-1">
-                  <p className="font-semibold">{t('settings.ipHintTitle')}</p>
-                  <p>• {t('settings.ipHintWin')}</p>
-                  <p>• {t('settings.ipHintNext')} <span className="font-mono">http://192.168.x.x:5173</span></p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeNav === 'help' && (
-            <div className="space-y-4 animate-fade-in max-w-2xl">
-              <div>
-                <h2 className="text-2xl font-black text-white">{t('help.title')}</h2>
-                <p className="text-sm text-white/40 mt-1">{t('help.subtitle')}</p>
-              </div>
-
-              <div className="glass rounded-2xl p-6 space-y-3">
-                <h3 className="text-sm font-bold text-white">{t('help.basics.title')}</h3>
-                <p className="text-sm text-white/60">{t('help.basics.status')}</p>
-                <p className="text-sm text-white/60">{t('help.basics.search')}</p>
-                {auth?.id === 'admin' && <p className="text-sm text-white/60">{t('help.basics.globalSearch')}</p>}
-                <p className="text-sm text-white/60">{t('help.basics.unsaved')}</p>
-              </div>
-
-              <div className="glass rounded-2xl p-6 space-y-3">
-                <h3 className="text-sm font-bold text-white">{t('help.relays.title')}</h3>
-                {auth?.id === 'admin' && <p className="text-sm text-white/60">{t('help.relays.add')}</p>}
-                {auth?.id === 'admin' && <p className="text-sm text-white/60">{t('help.relays.edit')}</p>}
-                <p className="text-sm text-white/60">{t('help.relays.qr')}</p>
-                <p className="text-sm text-white/60">{t('help.relays.pdf')}</p>
-                <p className="text-sm text-white/60">{t('help.relays.csv')}</p>
-              </div>
-
-              {auth?.id === 'admin' && (
-                <div className="glass rounded-2xl p-6 space-y-3">
-                  <h3 className="text-sm font-bold text-white">{t('help.bulk.title')}</h3>
-                  <p className="text-sm text-white/60">{t('help.bulk.edit')}</p>
-                  <p className="text-sm text-white/60">{t('help.bulk.import')}</p>
-                  <p className="text-sm text-white/60">{t('help.bulk.search')}</p>
-                </div>
+              {activeNav === 'help' && (
+                <HelpPage t={t} auth={auth} />
               )}
-
-              <div className="glass rounded-2xl p-6 space-y-3">
-                <h3 className="text-sm font-bold text-white">{t('help.delete.title')}</h3>
-                <p className="text-sm text-white/60">{t('help.delete.desc')}</p>
-              </div>
-
-              {auth?.id === 'admin' && (
-                <div className="glass rounded-2xl p-6 space-y-3">
-                  <h3 className="text-sm font-bold text-white">{t('help.admin.title')}</h3>
-                  <p className="text-sm text-white/60">{t('help.admin.stations')}</p>
-                  <p className="text-sm text-white/60">{t('help.admin.uchastkalar')}</p>
-                  <p className="text-sm text-white/60">{t('help.admin.mexaniklar')}</p>
-                  <p className="text-sm text-white/60">{t('help.admin.activityLog')}</p>
-                </div>
-              )}
-            </div>
-          )}
-          </>
+            </>
           )}
         </main>
       </div>
 
-      <Modal isOpen={!!selectedRelay} onClose={() => { if (confirmDiscard()) { setIsDirty(false); setSelectedRelay(null); } }}>
-        <div className="glass rounded-2xl p-6" onInput={() => setIsDirty(true)}>
-          <h2 className="text-lg font-bold text-white mb-1">{t('editRelay.title')}</h2>
-          <p className="text-sm text-white/40 mb-5">{selectedRelay?.name}</p>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">{t('field.name')}</label>
-              <input value={selectedRelay?.name || ''}
-                onChange={(e) => setSelectedRelay({ ...selectedRelay, name: e.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">{t('field.factoryNum')}</label>
-              <input value={selectedRelay?.num || ''}
-                onChange={(e) => setSelectedRelay({ ...selectedRelay, num: e.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">{t('common.station')}</label>
-              <select value={selectedRelay?.stationId || ''}
-                onChange={(e) => setSelectedRelay({ ...selectedRelay, stationId: e.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50">
-                {stations.filter((s) => s.id !== 'admin').map((s) => <option key={s.id} value={s.id} className="bg-neutral-900 text-white">{s.name}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">{t('field.stativNum')}</label>
-              <input value={selectedRelay?.stativ || ''}
-                onChange={(e) => setSelectedRelay({ ...selectedRelay, stativ: e.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">{t('field.lastCheck')}</label>
-              <input type="date" value={selectedRelay?.lastCheck || ''}
-                onChange={(e) => setSelectedRelay({ ...selectedRelay, lastCheck: e.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">{t('field.nextCheck')}</label>
-              <input type="date" value={selectedRelay?.nextCheck || ''}
-                onChange={(e) => setSelectedRelay({
-                  ...selectedRelay,
-                  nextCheck: e.target.value,
-                  status: getRelayStatusFromDate(e.target.value),
-                })}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-            </div>
-          </div>
-          <div className="mt-4 space-y-1.5">
-            <label className="text-xs font-medium text-white/60">{t('field.checkedBy')}</label>
-            <MechanicSelect mexaniklar={mexaniklar} value={selectedRelay?.note || ''}
-              onChange={(v) => { setSelectedRelay({ ...selectedRelay, note: v }); setIsDirty(true); }} t={t} />
-          </div>
-          <div className="mt-5 flex gap-3">
-            <button onClick={handleSaveEdit}
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
-              {t('common.save')}
-            </button>
-            <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setSelectedRelay(null); }}
-              className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-              {t('common.cancel')}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={bulkEditOpen} onClose={() => setBulkEditOpen(false)}>
-        <div className="glass rounded-2xl p-6">
-          <h2 className="text-lg font-bold text-white mb-1">{t('bulkEdit.title')}</h2>
-          <p className="text-sm text-white/40 mb-5">{t('bulkEdit.selectedCount', selectedRelayIds.length)}</p>
-
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <input type="checkbox" className="mt-3 rounded border-white/20 bg-white/5" checked={bulkEdit.applyStation}
-                onChange={(e) => setBulkEdit({ ...bulkEdit, applyStation: e.target.checked })} />
-              <div className="flex-1 space-y-1.5">
-                <label className="text-xs font-medium text-white/60">{t('common.station')}</label>
-                <select value={bulkEdit.stationId} disabled={!bulkEdit.applyStation}
-                  onChange={(e) => setBulkEdit({ ...bulkEdit, stationId: e.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 disabled:opacity-40">
-                  <option value="" className="bg-neutral-900 text-white"></option>
-                  {stations.filter((s) => s.id !== 'admin').map((s) => <option key={s.id} value={s.id} className="bg-neutral-900 text-white">{s.name}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <input type="checkbox" className="mt-3 rounded border-white/20 bg-white/5" checked={bulkEdit.applyLastCheck}
-                onChange={(e) => setBulkEdit({ ...bulkEdit, applyLastCheck: e.target.checked })} />
-              <div className="flex-1 space-y-1.5">
-                <label className="text-xs font-medium text-white/60">{t('field.lastCheck')}</label>
-                <input type="date" value={bulkEdit.lastCheck} disabled={!bulkEdit.applyLastCheck}
-                  onChange={(e) => setBulkEdit({ ...bulkEdit, lastCheck: e.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 disabled:opacity-40" />
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <input type="checkbox" className="mt-3 rounded border-white/20 bg-white/5" checked={bulkEdit.applyNextCheck}
-                onChange={(e) => setBulkEdit({ ...bulkEdit, applyNextCheck: e.target.checked })} />
-              <div className="flex-1 space-y-1.5">
-                <label className="text-xs font-medium text-white/60">{t('field.nextCheck')}</label>
-                <input type="date" value={bulkEdit.nextCheck} disabled={!bulkEdit.applyNextCheck}
-                  onChange={(e) => setBulkEdit({ ...bulkEdit, nextCheck: e.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 disabled:opacity-40" />
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <input type="checkbox" className="mt-3 rounded border-white/20 bg-white/5" checked={bulkEdit.applyStativ}
-                onChange={(e) => setBulkEdit({ ...bulkEdit, applyStativ: e.target.checked })} />
-              <div className="flex-1 space-y-1.5">
-                <label className="text-xs font-medium text-white/60">{t('field.stativNum')}</label>
-                <input value={bulkEdit.stativ} disabled={!bulkEdit.applyStativ}
-                  onChange={(e) => setBulkEdit({ ...bulkEdit, stativ: e.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 disabled:opacity-40" />
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <input type="checkbox" className="mt-3 rounded border-white/20 bg-white/5" checked={bulkEdit.applyNote}
-                onChange={(e) => setBulkEdit({ ...bulkEdit, applyNote: e.target.checked })} />
-              <div className="flex-1 space-y-1.5">
-                <label className="text-xs font-medium text-white/60">{t('field.checkedBy')}</label>
-                <fieldset disabled={!bulkEdit.applyNote} className="disabled:opacity-40">
-                  <MechanicSelect mexaniklar={mexaniklar} value={bulkEdit.note}
-                    onChange={(v) => setBulkEdit({ ...bulkEdit, note: v })} t={t} />
-                </fieldset>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 flex gap-3">
-            <button onClick={handleSaveBulkEdit}
-              disabled={!bulkEdit.applyStation && !bulkEdit.applyNextCheck && !bulkEdit.applyLastCheck && !bulkEdit.applyStativ && !bulkEdit.applyNote}
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed">
-              {t('bulkEdit.applyButton')}
-            </button>
-            <button onClick={() => setBulkEditOpen(false)}
-              className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-              {t('common.cancel')}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={importModalOpen} onClose={() => { setImportModalOpen(false); setImportPreview(null); }} maxWidth="max-w-2xl">
-        <div className="glass rounded-2xl p-6">
-          <h2 className="text-lg font-bold text-white mb-1">{t('bulkImport.title')}</h2>
-
-          {importPreview?.error ? (
-            <p className="text-sm text-red-400 mt-3">{importPreview.error}</p>
-          ) : importPreview ? (
-            <>
-              <p className="text-sm text-white/40 mb-4">
-                {t('bulkImport.summary', importValidRows.length, importInvalidCount, importPreview.rows.length)}
-              </p>
-              <div className="max-h-[45vh] overflow-y-auto rounded-xl border border-white/10">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-white/10 text-left text-white/40 uppercase tracking-wider">
-                        <th className="px-3 py-2 font-medium">{t('field.name')}</th>
-                        <th className="px-3 py-2 font-medium">{t('field.factoryNum')}</th>
-                        <th className="px-3 py-2 font-medium">{t('common.station')}</th>
-                        <th className="px-3 py-2 font-medium">{t('table.status')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {importPreview.rows.map((r, idx) => {
-                        const valid = r.name && r.num && r.stationId;
-                        return (
-                          <tr key={idx} className="border-b border-white/5 last:border-0">
-                            <td className="px-3 py-2 text-white/70">{r.name || '—'}</td>
-                            <td className="px-3 py-2 text-white/70">{r.num || '—'}</td>
-                            <td className="px-3 py-2 text-white/70">{r.stationName || '—'}</td>
-                            <td className="px-3 py-2">
-                              {valid ? (
-                                <span className="text-emerald-400">{t('bulkImport.rowOk')}</span>
-                              ) : (
-                                <span className="text-red-400">
-                                  {!r.name || !r.num ? t('bulkImport.missingFields') : t('bulkImport.stationNotFound')}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          ) : null}
-
-          <div className="mt-5 flex gap-3">
-            <button onClick={handleConfirmImport}
-              disabled={importValidRows.length === 0}
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed">
-              {t('bulkImport.confirmButton')}
-            </button>
-            <button onClick={() => { setImportModalOpen(false); setImportPreview(null); }}
-              className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-              {t('common.cancel')}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={!!editingStation} onClose={() => { if (confirmDiscard()) { setIsDirty(false); setEditingStation(null); } }}>
-        <div className="glass rounded-2xl p-6" onInput={() => setIsDirty(true)}>
-          <h2 className="text-lg font-bold text-white mb-1">{t('editStation.title')}</h2>
-          <p className="text-sm text-white/40 mb-5">{editingStation?.name}</p>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">{t('field.stationName')}</label>
-              <input value={editingStation?.name || ''} onChange={(e) => setEditingStation({ ...editingStation, name: e.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">{t('field.username')}</label>
-              <input value={editingStation?.username || ''} onChange={(e) => setEditingStation({ ...editingStation, username: e.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-              <p className="text-[10px] text-white/30">{t('editStation.usernameHint')}</p>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">{t('editStation.passwordLabel')}</label>
-              <input type="password" value={editingStation?.password || ''} onChange={(e) => setEditingStation({ ...editingStation, password: e.target.value })}
-                placeholder={t('editStation.passwordPlaceholder')}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-              <p className="text-[10px] text-white/30">{t('editStation.passwordHint')}</p>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/60">{t('field.uchastka')}</label>
-              <select value={editingStation?.uchastka_id || ''} onChange={(e) => setEditingStation({ ...editingStation, uchastka_id: e.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50">
-                <option value="" className="bg-neutral-900 text-white">{t('common.notSelected')}</option>
-                {uchastkalar.map((u) => <option key={u.id} value={u.id} className="bg-neutral-900 text-white">{u.name}</option>)}
-              </select>
-            </div>
-          </div>
-          {stationFormError && (
-            <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{stationFormError}</div>
-          )}
-          <div className="mt-5 flex gap-3">
-            <button onClick={handleUpdateStation}
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
-              {t('common.save')}
-            </button>
-            <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setStationFormError(''); setEditingStation(null); }}
-              className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-              {t('common.cancel')}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={!!qrPreviewRelay} onClose={() => setQrPreviewRelay(null)}>
-        <div className="glass rounded-2xl p-6 text-center">
-          <h2 className="text-lg font-bold text-white mb-1">{t('qrPreview.title')}</h2>
-          <p className="text-sm text-white/40 mb-5">{qrPreviewRelay?.name} — {qrPreviewRelay?.num}</p>
-          <div className="flex justify-center mb-4">
-            <div className="bg-white rounded-xl p-3">
-              <QRCodeSVG value={qrPreviewRelay ? qrUrl(qrPreviewRelay) : ''} size={160} level="H" />
-            </div>
-          </div>
-          <p className="text-xs text-white/40 mb-1">{t('qrPreview.stationLabel')} {getStationName(qrPreviewRelay?.stationId)}</p>
-          <p className="text-xs text-white/30">{t('qrPreview.scanHint1')}</p>
-          <p className="text-xs text-white/30 mb-5">{t('qrPreview.scanHint2')}</p>
-          <div className="flex flex-wrap justify-center gap-3">
-            <button onClick={() => { printQRCode(qrPreviewRelay); setQrPreviewRelay(null); }}
-              className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-5 py-2.5 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/20">
-              {t('common.qrDownload')}
-            </button>
-
-            <button onClick={() => setQrPreviewRelay(null)}
-              className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20">
-              {t('common.close')}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-
-
+      {/* Modals */}
+      <EditRelayModal
+        t={t} selectedRelay={selectedRelay} setSelectedRelay={setSelectedRelay}
+        stations={stations} mexaniklar={mexaniklar}
+        handleSaveEdit={handleSaveEdit} confirmDiscard={confirmDiscard} setIsDirty={setIsDirty}
+      />
+      <BulkEditModal
+        t={t} bulkEditOpen={bulkEditOpen} setBulkEditOpen={setBulkEditOpen}
+        bulkEdit={bulkEdit} setBulkEdit={setBulkEdit}
+        stations={stations} mexaniklar={mexaniklar}
+        handleSaveBulkEdit={handleSaveBulkEdit} selectedRelayIds={selectedRelayIds}
+      />
+      <ImportModal
+        t={t} importModalOpen={importModalOpen} setImportModalOpen={setImportModalOpen}
+        importPreview={importPreview} setImportPreview={setImportPreview}
+        importValidRows={importValidRows} importInvalidCount={importInvalidCount}
+        handleConfirmImport={handleConfirmImport}
+      />
+      <EditStationModal
+        t={t} editingStation={editingStation} setEditingStation={setEditingStation}
+        uchastkalar={uchastkalar} handleUpdateStation={handleUpdateStation}
+        stationFormError={stationFormError} setStationFormError={setStationFormError}
+        confirmDiscard={confirmDiscard} setIsDirty={setIsDirty}
+      />
       <ConfirmModal
-        isOpen={!!deleteStationId}
-        title={t('confirmStation.title')}
+        isOpen={!!deleteStationId} title={t('confirmStation.title')}
         message={t('confirmStation.message')}
-        onConfirm={handleDeleteStation}
-        onCancel={() => setDeleteStationId(null)}
-        t={t}
+        onConfirm={handleDeleteStation} onCancel={() => setDeleteStationId(null)} t={t}
       />
-
-      <Modal isOpen={!!editingUchastka} onClose={() => { if (confirmDiscard()) { setIsDirty(false); setEditingUchastka(null); } }}>
-        <div className="glass rounded-2xl p-6" onInput={() => setIsDirty(true)}>
-          <h2 className="text-lg font-bold text-white mb-1">{t('editUchastka.title')}</h2>
-          <div className="space-y-1.5 mt-4">
-            <label className="text-xs font-medium text-white/60">{t('field.uchastkaName')}</label>
-            <input value={editingUchastka?.name || ''} onChange={(e) => setEditingUchastka({ ...editingUchastka, name: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-          </div>
-          <div className="mt-5 flex gap-3">
-            <button onClick={handleUpdateUchastka}
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
-              {t('common.save')}
-            </button>
-            <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setEditingUchastka(null); }}
-              className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-              {t('common.cancel')}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
+      <EditUchastkaModal
+        t={t} editingUchastka={editingUchastka} setEditingUchastka={setEditingUchastka}
+        handleUpdateUchastka={handleUpdateUchastka} confirmDiscard={confirmDiscard} setIsDirty={setIsDirty}
+      />
       <ConfirmModal
-        isOpen={!!deleteUchastkaId}
-        title={t('confirmUchastka.title')}
+        isOpen={!!deleteUchastkaId} title={t('confirmUchastka.title')}
         message={t('confirmUchastka.message')}
-        onConfirm={handleDeleteUchastka}
-        onCancel={() => setDeleteUchastkaId(null)}
-        t={t}
+        onConfirm={handleDeleteUchastka} onCancel={() => setDeleteUchastkaId(null)} t={t}
       />
-
-      <Modal isOpen={!!editingMexanik} onClose={() => { if (confirmDiscard()) { setIsDirty(false); setEditingMexanik(null); } }}>
-        <div className="glass rounded-2xl p-6" onInput={() => setIsDirty(true)}>
-          <h2 className="text-lg font-bold text-white mb-1">{t('editMexanik.title')}</h2>
-          <div className="space-y-1.5 mt-4">
-            <label className="text-xs font-medium text-white/60">{t('field.mechanicName')}</label>
-            <input value={editingMexanik?.name || ''} onChange={(e) => setEditingMexanik({ ...editingMexanik, name: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-          </div>
-          <div className="space-y-1.5 mt-4">
-            <label className="text-xs font-medium text-white/60">{t('field.username')}</label>
-            <input value={editingMexanik?.username || ''} onChange={(e) => setEditingMexanik({ ...editingMexanik, username: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-            <p className="text-[10px] text-white/30">{t('addMexanik.loginHint')}</p>
-          </div>
-          <div className="space-y-1.5 mt-4">
-            <label className="text-xs font-medium text-white/60">{t('editStation.passwordLabel')}</label>
-            <input type="password" value={editingMexanik?.password || ''} onChange={(e) => setEditingMexanik({ ...editingMexanik, password: e.target.value })}
-              placeholder={t('editStation.passwordPlaceholder')}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50" />
-            <p className="text-[10px] text-white/30">{t('editStation.passwordHint')}</p>
-          </div>
-          <div className="mt-5 flex gap-3">
-            <button onClick={handleUpdateMexanik}
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
-              {t('common.save')}
-            </button>
-            <button onClick={() => { if (!confirmDiscard()) return; setIsDirty(false); setEditingMexanik(null); }}
-              className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-              {t('common.cancel')}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
+      <EditMexanikModal
+        t={t} editingMexanik={editingMexanik} setEditingMexanik={setEditingMexanik}
+        handleUpdateMexanik={handleUpdateMexanik} confirmDiscard={confirmDiscard} setIsDirty={setIsDirty}
+      />
       <ConfirmModal
-        isOpen={!!deleteMexanikId}
-        title={t('confirmMexanik.title')}
+        isOpen={!!deleteMexanikId} title={t('confirmMexanik.title')}
         message={t('confirmMexanik.message')}
-        onConfirm={handleDeleteMexanik}
-        onCancel={() => setDeleteMexanikId(null)}
-        t={t}
+        onConfirm={handleDeleteMexanik} onCancel={() => setDeleteMexanikId(null)} t={t}
+      />
+      <QrPreviewModal
+        t={t} qrPreviewRelay={qrPreviewRelay} setQrPreviewRelay={setQrPreviewRelay}
+        printQRCode={printQRCode} getStationName={getStationName}
+      />
+      <GlobalSearchModal
+        t={t} globalSearchOpen={globalSearchOpen} setGlobalSearchOpen={setGlobalSearchOpen}
+        globalSearchQuery={globalSearchQuery} setGlobalSearchQuery={setGlobalSearchQuery}
+        globalSearchResults={globalSearchResults} globalSearchHasResults={globalSearchHasResults}
+        openGlobalSearchRelay={openGlobalSearchRelay} openGlobalSearchStation={openGlobalSearchStation}
+        openGlobalSearchUchastka={openGlobalSearchUchastka} openGlobalSearchMexanik={openGlobalSearchMexanik}
+        getStationName={getStationName}
       />
 
-      <Modal isOpen={globalSearchOpen} onClose={() => { setGlobalSearchOpen(false); setGlobalSearchQuery(''); }}>
-        <div className="glass rounded-2xl p-4">
-          <div className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-4 py-3">
-            <svg className="h-5 w-5 flex-shrink-0 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 114 10.5a6.5 6.5 0 0113 0z" />
-            </svg>
-            <input autoFocus value={globalSearchQuery} onChange={(e) => setGlobalSearchQuery(e.target.value)}
-              placeholder={t('globalSearch.placeholder')}
-              className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/30" />
-          </div>
-
-          <div className="mt-3 max-h-[60vh] overflow-y-auto space-y-4">
-            {!globalSearchResults ? (
-              <p className="text-center text-sm text-white/30 py-8">{t('globalSearch.hint')}</p>
-            ) : !globalSearchHasResults ? (
-              <p className="text-center text-sm text-white/30 py-8">{t('globalSearch.noResults')}</p>
-            ) : (
-              <>
-                {globalSearchResults.relays.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/30 mb-1.5 px-1">{t('nav.relays')}</p>
-                    <div className="space-y-1">
-                      {globalSearchResults.relays.map((r) => (
-                        <button key={r.id} onClick={() => openGlobalSearchRelay(r)}
-                          className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm text-white/70 transition hover:bg-white/10 hover:text-white">
-                          <span className="truncate">{r.name} ({r.num})</span>
-                          <span className="flex-shrink-0 text-xs text-white/30">{getStationName(r.stationId)}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {globalSearchResults.stations.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/30 mb-1.5 px-1">{t('nav.stations')}</p>
-                    <div className="space-y-1">
-                      {globalSearchResults.stations.map((s) => (
-                        <button key={s.id} onClick={() => openGlobalSearchStation(s)}
-                          className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-white/70 transition hover:bg-white/10 hover:text-white">
-                          {s.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {globalSearchResults.uchastkalar.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/30 mb-1.5 px-1">{t('nav.uchastkalar')}</p>
-                    <div className="space-y-1">
-                      {globalSearchResults.uchastkalar.map((u) => (
-                        <button key={u.id} onClick={() => openGlobalSearchUchastka(u)}
-                          className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-white/70 transition hover:bg-white/10 hover:text-white">
-                          {u.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {globalSearchResults.mexaniklar.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/30 mb-1.5 px-1">{t('nav.mexaniklar')}</p>
-                    <div className="space-y-1">
-                      {globalSearchResults.mexaniklar.map((m) => (
-                        <button key={m.id} onClick={() => openGlobalSearchMexanik(m)}
-                          className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-white/70 transition hover:bg-white/10 hover:text-white">
-                          {m.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </Modal>
-
-      <div className="fixed bottom-4 right-4 z-[60] flex flex-col-reverse gap-2 items-end">
-        {toasts.map((toast) => (
-          <div key={toast.id} className="glass rounded-xl px-4 py-3 flex items-center gap-4 shadow-lg animate-fade-in max-w-sm">
-            <span className="text-sm text-white/80">{toast.message}</span>
-            <button onClick={toast.undo}
-              className="text-sm font-bold text-amber-400 transition hover:text-amber-300 whitespace-nowrap">
-              {t('common.undo')}
-            </button>
-          </div>
-        ))}
-      </div>
+      <ToastContainer t={t} toasts={toasts} />
     </div>
   );
 }
