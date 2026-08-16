@@ -1,4 +1,5 @@
-import { StatCard, MexanikStatsPanel } from '../components';
+import { useState } from 'react';
+import { StatCard } from '../components';
 import { statusConfig } from '../relayHelpers.js';
 
 export default function StationDetailView({
@@ -7,6 +8,17 @@ export default function StationDetailView({
   filteredViewStationRelays, setViewStation, setSelectedRelay, setIsDirty,
   printQRCode, handleDeleteRelay, setEditingStation,
 }) {
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const handleSetStatusFilter = (val) => {
+    setStatusFilter(val);
+    setViewStationNameFilter(null);
+  };
+
+  const displayRelays = statusFilter === 'all'
+    ? filteredViewStationRelays
+    : filteredViewStationRelays.filter((r) => r.status === statusFilter);
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center gap-3">
@@ -43,13 +55,17 @@ export default function StationDetailView({
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-        <StatCard label={t('stat.total')} value={viewStationStats.total} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0} />
-        <StatCard label={t('stat.expired')} value={viewStationStats.expired} gradient="bg-gradient-to-br from-red-500/20 to-red-500/5" icon="🔴" delay={100} />
-        <StatCard label={t('stat.warning')} value={viewStationStats.warning} gradient="bg-gradient-to-br from-yellow-500/20 to-yellow-500/5" icon="🟡" delay={200} />
-        <StatCard label={t('stat.active')} value={viewStationStats.active} gradient="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5" icon="🟢" delay={300} />
+        <StatCard label={t('stat.total')} value={viewStationStats.total} gradient={`bg-gradient-to-br from-white/10 to-white/5 ${statusFilter === 'all' ? 'ring-2 ring-white/30' : ''}`} icon="⚡" delay={0}
+          onClick={() => handleSetStatusFilter('all')} />
+        <StatCard label={t('stat.expired')} value={viewStationStats.expired} gradient={`bg-gradient-to-br from-red-500/20 to-red-500/5 ${statusFilter === 'red' ? 'ring-2 ring-red-400/50' : ''}`} icon="🔴" delay={100}
+          onClick={() => handleSetStatusFilter('red')} />
+        <StatCard label={t('stat.warning')} value={viewStationStats.warning} gradient={`bg-gradient-to-br from-yellow-500/20 to-yellow-500/5 ${statusFilter === 'yellow' ? 'ring-2 ring-yellow-400/50' : ''}`} icon="🟡" delay={200}
+          onClick={() => handleSetStatusFilter('yellow')} />
+        <StatCard label={t('stat.active')} value={viewStationStats.active} gradient={`bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 ${statusFilter === 'green' ? 'ring-2 ring-emerald-400/50' : ''}`} icon="🟢" delay={300}
+          onClick={() => handleSetStatusFilter('green')} />
       </div>
 
-      {viewStationNameCounts.length > 0 && (
+      {viewStationNameCounts.length > 0 && statusFilter === 'all' && (
         <div className="glass rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-white/80">{t('stationView.byName')}</h3>
@@ -76,7 +92,18 @@ export default function StationDetailView({
         </div>
       )}
 
-      {filteredViewStationRelays.length === 0 ? (
+      {/* Status filter badge */}
+      {statusFilter !== 'all' && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-white/50">
+            {t(`status.${statusFilter}`)} — {displayRelays.length} ta rele
+          </span>
+          <button onClick={() => setStatusFilter('all')}
+            className="text-xs text-white/40 hover:text-white transition">✕ Tozalash</button>
+        </div>
+      )}
+
+      {displayRelays.length === 0 ? (
         <div className="glass rounded-2xl p-12 text-center animate-fade-in">
           <div className="text-5xl mb-4 opacity-30">🔍</div>
           <p className="text-lg font-semibold text-white/60">{t('stationView.empty')}</p>
@@ -95,7 +122,7 @@ export default function StationDetailView({
               </tr>
             </thead>
             <tbody>
-              {filteredViewStationRelays.map((relay) => {
+              {displayRelays.map((relay) => {
                 const sc = statusConfig[relay.status];
                 return (
                   <tr key={relay.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
@@ -139,7 +166,7 @@ export default function StationDetailView({
       )}
 
       <div className="md:hidden grid grid-cols-1 gap-4">
-        {filteredViewStationRelays.map((relay, idx) => {
+        {displayRelays.map((relay, idx) => {
           const sc = statusConfig[relay.status];
           return (
             <div key={relay.id}

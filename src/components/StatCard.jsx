@@ -1,6 +1,9 @@
-export function StatCard({ label, value, gradient, icon, delay }) {
+export function StatCard({ label, value, gradient, icon, delay, onClick }) {
+  const isClickable = !!onClick;
+  const Tag = isClickable ? 'button' : 'div';
   return (
-    <div className={`group relative overflow-hidden rounded-2xl ${gradient} p-5 ring-1 ring-white/10 transition-all duration-500 hover:ring-white/20 hover:scale-[1.02] hover:shadow-2xl animate-slide-up`}
+    <Tag onClick={onClick}
+      className={`group relative overflow-hidden rounded-2xl ${gradient} p-5 ring-1 ring-white/10 transition-all duration-500 hover:ring-white/20 hover:scale-[1.02] hover:shadow-2xl animate-slide-up w-full text-left ${isClickable ? 'cursor-pointer active:scale-[0.98]' : ''}`}
       style={{ animationDelay: `${delay}ms` }}>
       <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/5 blur-2xl group-hover:scale-150 transition-transform duration-700" />
       <div className="relative">
@@ -12,7 +15,10 @@ export function StatCard({ label, value, gradient, icon, delay }) {
         <div className="mt-3 h-1 w-full rounded-full bg-white/10">
           <div className="h-full rounded-full bg-white/30 transition-all duration-1000" style={{ width: `${Math.min(100, (value / 10) * 100)}%` }} />
         </div>
+        {isClickable && (
+          <p className="mt-2 text-[10px] text-white/30 group-hover:text-white/50 transition">Ko'rish →</p>
+        )}
       </div>
-    </div>
+    </Tag>
   );
 }

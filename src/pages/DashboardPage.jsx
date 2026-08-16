@@ -26,10 +26,14 @@ export default function DashboardPage({ t, stats, stationRelays, visibleStations
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-        <StatCard label={t('stat.total')} value={stats.total} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0} />
-        <StatCard label={t('stat.expired')} value={stats.expired} gradient="bg-gradient-to-br from-red-500/20 to-red-500/5" icon="🔴" delay={100} />
-        <StatCard label={t('stat.warning')} value={stats.warning} gradient="bg-gradient-to-br from-yellow-500/20 to-yellow-500/5" icon="🟡" delay={200} />
-        <StatCard label={t('stat.active')} value={stats.active} gradient="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5" icon="🟢" delay={300} />
+        <StatCard label={t('stat.total')} value={stats.total} gradient="bg-gradient-to-br from-white/10 to-white/5" icon="⚡" delay={0}
+          onClick={() => { setActiveNav('relays'); setFilterStatus('all'); }} />
+        <StatCard label={t('stat.expired')} value={stats.expired} gradient="bg-gradient-to-br from-red-500/20 to-red-500/5" icon="🔴" delay={100}
+          onClick={() => { setActiveNav('relays'); setFilterStatus('red'); }} />
+        <StatCard label={t('stat.warning')} value={stats.warning} gradient="bg-gradient-to-br from-yellow-500/20 to-yellow-500/5" icon="🟡" delay={200}
+          onClick={() => { setActiveNav('relays'); setFilterStatus('yellow'); }} />
+        <StatCard label={t('stat.active')} value={stats.active} gradient="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5" icon="🟢" delay={300}
+          onClick={() => { setActiveNav('relays'); setFilterStatus('green'); }} />
       </div>
 
       <div className="glass rounded-2xl p-5">
