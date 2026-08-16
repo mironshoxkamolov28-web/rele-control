@@ -471,7 +471,19 @@ export default function RelayDashboard() {
 
   const handleSaveEdit = async () => {
     const before = relays.find((r) => r.id === selectedRelay.id);
-    const { error } = await supabase.from('relays').update(fromRelay(selectedRelay)).eq('id', selectedRelay.id);
+    const relay = fromRelay(selectedRelay);
+    const { error } = await supabase.rpc('update_relay_anon', {
+      p_id: selectedRelay.id,
+      p_station_id: relay.station_id,
+      p_name: relay.name,
+      p_num: relay.num,
+      p_stativ: relay.stativ || null,
+      p_last_check: relay.last_check || null,
+      p_next_check: relay.next_check || null,
+      p_note: relay.note || null,
+      p_object: relay.object || null,
+      p_manzil: relay.manzil || null,
+    });
     if (error) { alert(error.message); return; }
     setRelays(relays.map((r) => r.id === selectedRelay.id ? { ...selectedRelay } : r));
     const diff = buildRelayDiff(before, selectedRelay, getStationName);
