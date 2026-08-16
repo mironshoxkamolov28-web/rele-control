@@ -47,6 +47,7 @@ export const translations = {
     'activityLog.entity.mexanik': "Mexanik",
 
     'toast.deleted': (label) => `${label} o'chirildi`,
+    'toast.saved': "Muvaffaqiyatli saqlandi",
     'common.undo': "Qaytarish",
 
     'globalSearch.trigger': "Qidirish...",
@@ -307,6 +308,7 @@ export const translations = {
     'activityLog.entity.mexanik': "Механик",
 
     'toast.deleted': (label) => `${label} удалено`,
+    'toast.saved': "Успешно сохранено",
     'common.undo': "Отменить",
 
     'globalSearch.trigger': "Поиск...",
@@ -567,6 +569,7 @@ export const translations = {
     'activityLog.entity.mexanik': "Mechanic",
 
     'toast.deleted': (label) => `${label} deleted`,
+    'toast.saved': "Saved successfully",
     'common.undo': "Undo",
 
     'globalSearch.trigger': "Search...",

@@ -404,6 +404,22 @@ export default function RelayDashboard() {
     } catch {}
   };
 
+  const pushToast = (message, type = 'info', duration = 4000) => {
+    const toastId = `${Date.now()}-${Math.random()}`;
+    toastTimersRef.current[toastId] = setTimeout(() => {
+      delete toastTimersRef.current[toastId];
+      setToasts((cur) => cur.filter((item) => item.id !== toastId));
+    }, duration);
+    setToasts((cur) => [...cur, {
+      id: toastId, message, type,
+      onClose: () => {
+        clearTimeout(toastTimersRef.current[toastId]);
+        delete toastTimersRef.current[toastId];
+        setToasts((cur2) => cur2.filter((item) => item.id !== toastId));
+      },
+    }]);
+  };
+
   const pushUndoToast = (message, onCommit, onUndo) => {
     const toastId = `${Date.now()}-${Math.random()}`;
     toastTimersRef.current[toastId] = setTimeout(() => {
@@ -412,7 +428,7 @@ export default function RelayDashboard() {
       onCommit();
     }, 7000);
     setToasts((cur) => [...cur, {
-      id: toastId, message,
+      id: toastId, message, type: 'undo',
       undo: () => {
         clearTimeout(toastTimersRef.current[toastId]);
         delete toastTimersRef.current[toastId];
@@ -484,10 +500,11 @@ export default function RelayDashboard() {
       p_object: relay.object || null,
       p_manzil: relay.manzil || null,
     });
-    if (error) { alert(error.message); return; }
+    if (error) { pushToast(error.message, 'error'); return; }
     setRelays(relays.map((r) => r.id === selectedRelay.id ? { ...selectedRelay } : r));
     const diff = buildRelayDiff(before, selectedRelay, getStationName);
     logActivity('update', 'relay', `${selectedRelay.name} (${selectedRelay.num})`, diff.length ? JSON.stringify(diff) : null);
+    pushToast(t('toast.saved'), 'success');
     setIsDirty(false); setSelectedRelay(null);
   };
 
