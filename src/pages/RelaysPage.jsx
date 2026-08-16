@@ -111,7 +111,7 @@ export default function RelaysPage({
               <th className="px-4 py-3 font-medium">{t('table.stativ')}</th>
               <th className="px-4 py-3 font-medium">{t('field.lastCheck')}</th>
               <th className="px-4 py-3 font-medium">{t('table.nextCheck')}</th>
-              {auth?.id === 'admin' && <th className="px-4 py-3 font-medium text-right">{t('table.actions')}</th>}
+              <th className="px-4 py-3 font-medium text-right">{t('table.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -142,24 +142,24 @@ export default function RelaysPage({
                   <td className="px-4 py-3 text-white/60">{relay.stativ || '—'}</td>
                   <td className="px-4 py-3 text-white/60">{relay.lastCheck || '—'}</td>
                   <td className="px-4 py-3 text-white/60">{relay.nextCheck}</td>
-                  {auth?.id === 'admin' && (
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
-                          className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                          {t('common.edit')}
-                        </button>
-                        <button onClick={() => printQRCode(relay)}
-                          className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
-                          {t('common.qr')}
-                        </button>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
+                        className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                        {t('common.edit')}
+                      </button>
+                      <button onClick={() => printQRCode(relay)}
+                        className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
+                        {t('common.qr')}
+                      </button>
+                      {auth?.id === 'admin' && (
                         <button onClick={() => { if (confirm(t('relays.deleteConfirm', relay.name, relay.num))) handleDeleteRelay(relay.id); }}
                           className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
                           {t('common.delete')}
                         </button>
-                      </div>
-                    </td>
-                  )}
+                      )}
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -213,27 +213,27 @@ export default function RelaysPage({
                     </div>
                   )}
                 </div>
-                {auth?.id === 'admin' && (
-                  <div className="mt-4 flex items-center justify-between pt-4 border-t border-white/5">
-                    <div className="flex gap-2">
-                      <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
-                        className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                        {t('common.edit')}
-                      </button>
-                      <button onClick={() => printQRCode(relay)}
-                        className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
-                        {t('common.qrDownload')}
-                      </button>
+                <div className="mt-4 flex items-center justify-between pt-4 border-t border-white/5">
+                  <div className="flex gap-2">
+                    <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
+                      className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                      {t('common.edit')}
+                    </button>
+                    <button onClick={() => printQRCode(relay)}
+                      className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
+                      {t('common.qrDownload')}
+                    </button>
+                    {auth?.id === 'admin' && (
                       <button onClick={() => { if (confirm(t('relays.deleteConfirm', relay.name, relay.num))) handleDeleteRelay(relay.id); }}
                         className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
                         {t('common.delete')}
                       </button>
-                    </div>
-                    <div id={`qr-${relay.id}`} className="bg-white rounded-lg p-1.5 transition-transform group-hover:scale-110">
-                      <QRCodeSVG value={qrUrl(relay)} size={44} level="H" />
-                    </div>
+                    )}
                   </div>
-                )}
+                  <div id={`qr-${relay.id}`} className="bg-white rounded-lg p-1.5 transition-transform group-hover:scale-110">
+                    <QRCodeSVG value={qrUrl(relay)} size={44} level="H" />
+                  </div>
+                </div>
               </div>
             </div>
           );

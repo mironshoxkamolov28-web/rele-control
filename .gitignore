@@ -8,3 +8,5 @@ build/
 .vercel
 release/
 android/
+*.zip
+.claude/

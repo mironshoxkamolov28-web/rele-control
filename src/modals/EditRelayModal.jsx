@@ -2,7 +2,7 @@ import { Modal } from '../components';
 import { MechanicSelect } from '../components';
 import { getRelayStatusFromDate } from '../relayHelpers.js';
 
-export default function EditRelayModal({ t, selectedRelay, setSelectedRelay, stations, mexaniklar, handleSaveEdit, confirmDiscard, setIsDirty }) {
+export default function EditRelayModal({ t, auth, selectedRelay, setSelectedRelay, stations, mexaniklar, handleSaveEdit, confirmDiscard, setIsDirty }) {
   return (
     <Modal isOpen={!!selectedRelay} onClose={() => { if (confirmDiscard()) { setIsDirty(false); setSelectedRelay(null); } }}>
       <div className="glass rounded-2xl p-6" onInput={() => setIsDirty(true)}>
@@ -23,11 +23,17 @@ export default function EditRelayModal({ t, selectedRelay, setSelectedRelay, sta
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-white/60">{t('common.station')}</label>
-            <select value={selectedRelay?.stationId || ''}
-              onChange={(e) => setSelectedRelay({ ...selectedRelay, stationId: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50">
-              {stations.filter((s) => s.id !== 'admin').map((s) => <option key={s.id} value={s.id} className="bg-neutral-900 text-white">{s.name}</option>)}
-            </select>
+            {auth?.id === 'admin' ? (
+              <select value={selectedRelay?.stationId || ''}
+                onChange={(e) => setSelectedRelay({ ...selectedRelay, stationId: e.target.value })}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50">
+                {stations.filter((s) => s.id !== 'admin').map((s) => <option key={s.id} value={s.id} className="bg-neutral-900 text-white">{s.name}</option>)}
+              </select>
+            ) : (
+              <div className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50">
+                {stations.find((s) => s.id === selectedRelay?.stationId)?.name || selectedRelay?.stationId}
+              </div>
+            )}
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-white/60">{t('field.stativNum')}</label>

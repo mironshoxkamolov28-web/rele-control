@@ -471,7 +471,8 @@ export default function RelayDashboard() {
 
   const handleSaveEdit = async () => {
     const before = relays.find((r) => r.id === selectedRelay.id);
-    await supabase.from('relays').update(fromRelay(selectedRelay)).eq('id', selectedRelay.id);
+    const { error } = await supabase.from('relays').update(fromRelay(selectedRelay)).eq('id', selectedRelay.id);
+    if (error) { alert(error.message); return; }
     setRelays(relays.map((r) => r.id === selectedRelay.id ? { ...selectedRelay } : r));
     const diff = buildRelayDiff(before, selectedRelay, getStationName);
     logActivity('update', 'relay', `${selectedRelay.name} (${selectedRelay.num})`, diff.length ? JSON.stringify(diff) : null);
@@ -847,6 +848,7 @@ export default function RelayDashboard() {
               filteredViewStationRelays={filteredViewStationRelays}
               setViewStation={setViewStation} setSelectedRelay={setSelectedRelay} setIsDirty={setIsDirty}
               printQRCode={printQRCode} handleDeleteRelay={handleDeleteRelay}
+              setEditingStation={setEditingStation}
             />
           ) : viewMexanik ? (
             <div className="space-y-6 animate-fade-in">
@@ -989,7 +991,7 @@ export default function RelayDashboard() {
 
       {/* Modals */}
       <EditRelayModal
-        t={t} selectedRelay={selectedRelay} setSelectedRelay={setSelectedRelay}
+        t={t} auth={auth} selectedRelay={selectedRelay} setSelectedRelay={setSelectedRelay}
         stations={stations} mexaniklar={mexaniklar}
         handleSaveEdit={handleSaveEdit} confirmDiscard={confirmDiscard} setIsDirty={setIsDirty}
       />

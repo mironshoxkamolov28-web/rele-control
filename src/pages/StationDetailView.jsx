@@ -5,7 +5,7 @@ export default function StationDetailView({
   t, auth, viewStationData, viewStationStats, viewStationRelays,
   viewStationNameCounts, viewStationNameFilter, setViewStationNameFilter,
   filteredViewStationRelays, setViewStation, setSelectedRelay, setIsDirty,
-  printQRCode, handleDeleteRelay,
+  printQRCode, handleDeleteRelay, setEditingStation,
 }) {
   return (
     <div className="space-y-6 animate-fade-in">
@@ -16,10 +16,30 @@ export default function StationDetailView({
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <div>
+        <div className="flex-1">
           <h2 className="text-2xl font-black text-white">{viewStationData?.name}</h2>
           <p className="text-sm text-white/40 mt-1">{t('stationView.subtitle')}</p>
         </div>
+        {auth?.id === 'admin' && viewStationData && (
+          <button
+            onClick={() => {
+              setIsDirty(false);
+              setEditingStation({
+                _originalId: viewStationData.id,
+                name: viewStationData.name,
+                username: viewStationData.username,
+                password: '',
+                uchastka_id: viewStationData.uchastka_id || '',
+              });
+            }}
+            className="flex items-center gap-1.5 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white/70 transition hover:bg-white/20 hover:text-white"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            {t('common.edit')}
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
@@ -71,7 +91,7 @@ export default function StationDetailView({
                 <th className="px-4 py-3 font-medium">{t('table.stativ')}</th>
                 <th className="px-4 py-3 font-medium">{t('field.lastCheck')}</th>
                 <th className="px-4 py-3 font-medium">{t('table.nextCheck')}</th>
-                {auth?.id === 'admin' && <th className="px-4 py-3 font-medium text-right">{t('table.actions')}</th>}
+                <th className="px-4 py-3 font-medium text-right">{t('table.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -92,24 +112,24 @@ export default function StationDetailView({
                     <td className="px-4 py-3 text-white/60">{relay.stativ || '—'}</td>
                     <td className="px-4 py-3 text-white/60">{relay.lastCheck || '—'}</td>
                     <td className="px-4 py-3 text-white/60">{relay.nextCheck}</td>
-                    {auth?.id === 'admin' && (
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
-                            className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                            {t('common.edit')}
-                          </button>
-                          <button onClick={() => printQRCode(relay)}
-                            className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
-                            {t('common.qr')}
-                          </button>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
+                          className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                          {t('common.edit')}
+                        </button>
+                        <button onClick={() => printQRCode(relay)}
+                          className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
+                          {t('common.qr')}
+                        </button>
+                        {auth?.id === 'admin' && (
                           <button onClick={() => { if (confirm(t('relays.deleteConfirm', relay.name, relay.num))) handleDeleteRelay(relay.id); }}
                             className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
                             {t('common.delete')}
                           </button>
-                        </div>
-                      </td>
-                    )}
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -142,22 +162,22 @@ export default function StationDetailView({
                   {relay.lastCheck && <div>{t('field.lastCheck')}: {relay.lastCheck}</div>}
                   <div>{relay.nextCheck}</div>
                 </div>
-                {auth?.id === 'admin' && (
-                  <div className="mt-4 flex gap-2 pt-4 border-t border-white/5">
-                    <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
-                      className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
-                      {t('common.edit')}
-                    </button>
-                    <button onClick={() => printQRCode(relay)}
-                      className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
-                      {t('common.qr')}
-                    </button>
+                <div className="mt-4 flex gap-2 pt-4 border-t border-white/5">
+                  <button onClick={() => { setIsDirty(false); setSelectedRelay({ ...relay }); }}
+                    className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/20 hover:text-white">
+                    {t('common.edit')}
+                  </button>
+                  <button onClick={() => printQRCode(relay)}
+                    className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/20">
+                    {t('common.qr')}
+                  </button>
+                  {auth?.id === 'admin' && (
                     <button onClick={() => { if (confirm(t('relays.deleteConfirm', relay.name, relay.num))) handleDeleteRelay(relay.id); }}
                       className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
                       {t('common.delete')}
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           );
