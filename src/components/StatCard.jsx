@@ -8,15 +8,15 @@ export function StatCard({ label, value, gradient, icon, delay, onClick }) {
       <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/5 blur-2xl group-hover:scale-150 transition-transform duration-700" />
       <div className="relative">
         <div className="flex items-center justify-between">
-          <p className="text-xs sm:text-sm font-medium text-white/60">{label}</p>
-          <span className="text-base sm:text-lg opacity-60">{icon}</span>
+          <p className="text-xs font-medium text-white/60 truncate pr-1">{label}</p>
+          <span className="text-sm sm:text-lg opacity-60 flex-shrink-0">{icon}</span>
         </div>
-        <p className="mt-1 sm:mt-2 text-2xl sm:text-4xl font-black tracking-tight text-white animate-count-up">{value}</p>
-        <div className="mt-2 sm:mt-3 h-1 w-full rounded-full bg-white/10">
+        <p className="mt-1 text-2xl sm:text-4xl font-black tracking-tight text-white animate-count-up">{value}</p>
+        <div className="mt-1.5 sm:mt-3 h-0.5 sm:h-1 w-full rounded-full bg-white/10 hidden sm:block">
           <div className="h-full rounded-full bg-white/30 transition-all duration-1000" style={{ width: `${Math.min(100, (value / 10) * 100)}%` }} />
         </div>
         {isClickable && (
-          <p className="mt-1.5 sm:mt-2 text-[10px] text-white/30 group-hover:text-white/50 transition">Ko'rish →</p>
+          <p className="mt-1 sm:mt-2 text-[10px] text-white/30 group-hover:text-white/50 transition hidden sm:block">Ko'rish →</p>
         )}
       </div>
     </Tag>

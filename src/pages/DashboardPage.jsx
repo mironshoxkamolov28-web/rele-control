@@ -2,26 +2,26 @@ import { StatCard } from '../components';
 
 export default function DashboardPage({ t, stats, stationRelays, visibleStations, globalNameCounts, relays, getRelayStatusFromDate, setActiveNav, setFilterStatus, setSearchQuery, setViewStation }) {
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 animate-fade-in">
       <div>
-        <h2 className="text-2xl font-black text-white">{t('nav.dashboard')}</h2>
-        <p className="text-sm text-white/40 mt-1">{t('dashboard.subtitle')}</p>
+        <h2 className="text-xl font-black text-white">{t('nav.dashboard')}</h2>
+        <p className="text-xs text-white/40 mt-0.5 hidden sm:block">{t('dashboard.subtitle')}</p>
       </div>
 
       {stats.expired > 0 && (
-        <div className="flex items-start gap-3 rounded-2xl bg-red-500/10 border border-red-500/30 p-4 sm:p-5 animate-fade-in">
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-red-500/20 text-lg animate-pulse-soft">⚠️</span>
+        <div className="flex items-center gap-3 rounded-2xl bg-red-500/10 border border-red-500/30 p-3 sm:p-5 animate-fade-in">
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-red-500/20 text-base">⚠️</span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-red-400">{t('dashboard.alertExpiredCount', stats.expired)}</p>
-            <p className="text-xs text-white/50 mt-0.5 truncate">
+            <p className="text-xs text-white/50 truncate hidden sm:block">
               {stationRelays.filter((r) => r.status === 'red').slice(0, 3).map((r) => r.name).join(', ')}
               {stats.expired > 3 ? t('dashboard.alertMore', stats.expired - 3) : ''} {t('dashboard.alertAction')}
             </p>
-            <button onClick={() => { setActiveNav('relays'); setFilterStatus('red'); }}
-              className="mt-3 rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/30">
-              {t('dashboard.viewBtn')}
-            </button>
           </div>
+          <button onClick={() => { setActiveNav('relays'); setFilterStatus('red'); }}
+            className="flex-shrink-0 rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/30">
+            {t('dashboard.viewBtn')}
+          </button>
         </div>
       )}
 
@@ -36,28 +36,25 @@ export default function DashboardPage({ t, stats, stationRelays, visibleStations
           onClick={() => { setActiveNav('relays'); setFilterStatus('green'); }} />
       </div>
 
-      <div className="glass rounded-2xl p-5">
-        <h3 className="text-sm font-bold text-white/80 mb-4">{t('dashboard.byStation')}</h3>
-        <div className="space-y-3">
+      <div className="glass rounded-2xl p-3 sm:p-5">
+        <h3 className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2">{t('dashboard.byStation')}</h3>
+        <div className="space-y-1">
           {visibleStations.map((s) => {
             const count = relays.filter((r) => r.stationId === s.id).length;
             const expired = relays.filter((r) => r.stationId === s.id && getRelayStatusFromDate(r.nextCheck) === 'red').length;
             return (
               <button key={s.id} type="button" onClick={() => setViewStation(s.id)}
                 style={{ touchAction: 'manipulation' }}
-                className="flex w-full items-center gap-4 rounded-xl bg-white/5 px-4 py-3 text-left transition-colors duration-150 hover:bg-white/10 active:bg-white/15">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 text-xs font-bold">
+                className="flex w-full items-center gap-3 rounded-xl bg-white/5 px-3 py-2 text-left transition-colors duration-150 hover:bg-white/10 active:bg-white/15">
+                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 text-xs font-bold">
                   {s.name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-white truncate">{s.name}</p>
-                  <p className="text-xs text-white/40">{t('common.relayCountShort', count)}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-white">{count}</p>
-                  <p className={`text-xs ${expired > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {expired > 0 ? t('dashboard.expiredShort', expired) : t('dashboard.allGood')}
-                  </p>
+                <div className="text-right flex-shrink-0">
+                  <span className="text-sm font-bold text-white">{count}</span>
+                  {expired > 0 && <span className="ml-1.5 text-xs text-red-400">({expired}⚠)</span>}
                 </div>
               </button>
             );
@@ -66,15 +63,15 @@ export default function DashboardPage({ t, stats, stationRelays, visibleStations
       </div>
 
       {globalNameCounts.length > 0 && (
-        <div className="glass rounded-2xl p-5">
-          <h3 className="text-sm font-bold text-white/80 mb-4">{t('stationView.byName')}</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        <div className="glass rounded-2xl p-3 sm:p-5">
+          <h3 className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2">{t('stationView.byName')}</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
             {globalNameCounts.map((item) => (
               <button key={item.name} type="button"
                 onClick={() => { setActiveNav('relays'); setFilterStatus('all'); setSearchQuery(item.name); }}
-                className="flex items-center justify-between gap-2 rounded-xl bg-white/5 px-3 py-2 text-left transition hover:bg-white/10">
-                <span className="text-sm text-white/70 truncate">{item.name}</span>
-                <span className="flex-shrink-0 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-xs font-bold text-amber-400">{item.count}</span>
+                className="flex items-center justify-between gap-1.5 rounded-xl bg-white/5 px-2.5 py-1.5 text-left transition hover:bg-white/10">
+                <span className="text-xs text-white/70 truncate">{item.name}</span>
+                <span className="flex-shrink-0 rounded bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 text-xs font-bold text-amber-400">{item.count}</span>
               </button>
             ))}
           </div>
