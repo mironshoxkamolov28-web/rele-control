@@ -1,8 +1,23 @@
+import { useEffect } from 'react';
 import { LanguageToggle, ThemeToggle } from './index.js';
 
 export default function AppSidebar({ t, auth, lang, cycleLang, theme, toggleTheme, filteredNav, activeNav, setActiveNav, sidebarOpen, setSidebarOpen, confirmDiscard, setIsDirty, setViewStation, setViewMexanik, setViewMexanikMonth, setGlobalSearchOpen, handleLogout }) {
+  // Lock body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (sidebarOpen) {
+      const scrollY = window.scrollY;
+      document.body.classList.add('scroll-locked');
+      document.body.style.top = `-${scrollY}px`;
+      return () => {
+        document.body.classList.remove('scroll-locked');
+        document.body.style.top = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [sidebarOpen]);
+
   return (
-    <aside className={`fixed left-0 top-0 z-40 flex h-screen w-64 flex-col glass border-r border-white/5 transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
+    <aside className={`fixed left-0 top-0 z-40 flex h-screen flex-col glass border-r border-white/5 transition-transform duration-300 w-[280px] sm:w-64 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:w-64`}>
       <div className="flex items-center gap-3 border-b border-white/5 px-5 py-4">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/20">
           <span className="text-lg font-black text-slate-950">R</span>
@@ -11,6 +26,13 @@ export default function AppSidebar({ t, auth, lang, cycleLang, theme, toggleThem
           <h1 className="text-sm font-bold tracking-widest text-white">RELE CONTROL</h1>
           <p className="text-[9px] tracking-[0.2em] text-white/30 uppercase">{t('app.tagline')}</p>
         </div>
+        {/* Mobile close button */}
+        <button onClick={() => setSidebarOpen(false)}
+          className="lg:hidden ml-auto flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-white/50 transition hover:bg-white/20 hover:text-white">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       {auth?.id === 'admin' && (
@@ -21,7 +43,7 @@ export default function AppSidebar({ t, auth, lang, cycleLang, theme, toggleThem
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 114 10.5a6.5 6.5 0 0113 0z" />
             </svg>
             <span className="flex-1 text-left">{t('globalSearch.trigger')}</span>
-            <kbd className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px]">Ctrl K</kbd>
+            <kbd className="hidden sm:inline rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px]">Ctrl K</kbd>
           </button>
         </div>
       )}

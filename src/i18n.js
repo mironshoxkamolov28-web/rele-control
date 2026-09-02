@@ -17,6 +17,7 @@ export const translations = {
     'common.station': "Stansiya",
     'common.notSelected': "Tanlanmagan",
     'common.relayCountShort': (n) => `${n} ta rele`,
+    'common.actions': "Amallar",
 
     'app.tagline': "Boshqaruv paneli",
     'theme.toLight': "Yorug' rejim",
@@ -75,6 +76,7 @@ export const translations = {
     'bulkImport.missingColumns': "Faylda 'Nomi', 'Zavod №' yoki 'Stansiya' ustunlari topilmadi",
 
     'nav.help': "Yordam",
+    'nav.more': "Ko'proq",
     'help.title': "Yordam va qo'llanma",
     'help.subtitle': "Tizimdan qanday foydalanish bo'yicha qisqacha qo'llanma",
     'help.basics.title': "Asosiy tushunchalar",
@@ -278,6 +280,7 @@ export const translations = {
     'common.station': "Станция",
     'common.notSelected': "Не выбрано",
     'common.relayCountShort': (n) => `${n} реле`,
+    'common.actions': "Действия",
 
     'app.tagline': "Панель управления",
     'theme.toLight': "Светлый режим",
@@ -336,6 +339,7 @@ export const translations = {
     'bulkImport.missingColumns': "В файле не найдены столбцы 'Название', 'Заводской №' или 'Станция'",
 
     'nav.help': "Помощь",
+    'nav.more': "Ещё",
     'help.title': "Помощь и руководство",
     'help.subtitle': "Краткое руководство по использованию системы",
     'help.basics.title': "Основные понятия",
@@ -539,6 +543,7 @@ export const translations = {
     'common.station': "Station",
     'common.notSelected': "Not selected",
     'common.relayCountShort': (n) => `${n} relays`,
+    'common.actions': "Actions",
 
     'app.tagline': "Control panel",
     'theme.toLight': "Light mode",
@@ -597,6 +602,7 @@ export const translations = {
     'bulkImport.missingColumns': "Couldn't find 'Name', 'Factory No.', or 'Station' columns in the file",
 
     'nav.help': "Help",
+    'nav.more': "More",
     'help.title': "Help & guide",
     'help.subtitle': "A short guide to using the system",
     'help.basics.title': "Basics",

@@ -10,7 +10,7 @@ export default function LoginPage({
   loginError, handleLogin,
 }) {
   return (
-    <div className="bg-slate-950 text-slate-100 min-h-screen font-sans transition-colors duration-300 relative overflow-hidden">
+    <div className="bg-slate-950 text-slate-100 min-h-screen min-h-[100dvh] font-sans transition-colors duration-300 relative overflow-hidden">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-amber-500/10 blur-[120px] animate-float" />
         <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-[120px] animate-float" style={{ animationDelay: '-3s' }} />
@@ -19,7 +19,7 @@ export default function LoginPage({
         <LanguageToggle lang={lang} onCycle={cycleLang} />
         <ThemeToggle theme={theme} onToggle={toggleTheme} t={t} />
       </div>
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-screen min-h-[100dvh] items-center justify-center p-4">
         <div className="w-full max-w-5xl animate-fade-in">
           <div className="grid gap-8 lg:grid-cols-5">
             <div className="lg:col-span-3 hidden lg:flex flex-col justify-center space-y-6">
@@ -50,6 +50,31 @@ export default function LoginPage({
               </div>
             </div>
             <div className="lg:col-span-2">
+              {/* Mobile-only mini branding + stats */}
+              <div className="lg:hidden text-center mb-6 animate-fade-in">
+                <div className="flex justify-center mb-3">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/25">
+                    <span className="text-2xl font-black text-slate-950">R</span>
+                  </div>
+                </div>
+                <h1 className="text-lg font-bold tracking-widest text-white">RELE CONTROL</h1>
+                <p className="text-xs text-white/40 mt-1">{t('app.tagline')}</p>
+                <div className="flex justify-center gap-3 mt-4">
+                  <div className="rounded-xl glass-light px-3 py-2">
+                    <p className="text-lg font-black text-white">{relays.length}</p>
+                    <p className="text-[10px] text-white/40">{t('login.statTotalRelay')}</p>
+                  </div>
+                  <div className="rounded-xl glass-light px-3 py-2">
+                    <p className="text-lg font-black text-white">{stations.length - 1}</p>
+                    <p className="text-[10px] text-white/40">{t('login.statStations')}</p>
+                  </div>
+                  <div className="rounded-xl glass-light px-3 py-2">
+                    <p className="text-lg font-black text-white">100%</p>
+                    <p className="text-[10px] text-white/40">{t('login.statSecurity')}</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="glass rounded-2xl p-6 animate-slide-up">
                 <h3 className="text-xl font-bold text-white mb-1">{t('login.title')}</h3>
                 <p className="text-sm text-white/40 mb-6">{t('login.subtitle')}</p>

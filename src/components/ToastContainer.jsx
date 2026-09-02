@@ -7,7 +7,7 @@ const TOAST_STYLES = {
 
 export default function ToastContainer({ t, toasts }) {
   return (
-    <div className="fixed bottom-4 right-4 z-[60] flex flex-col-reverse gap-2 items-end pointer-events-none">
+    <div className="fixed bottom-24 lg:bottom-4 right-4 left-4 sm:left-auto z-[60] flex flex-col-reverse gap-2 items-end pointer-events-none">
       {toasts.map((toast) => {
         const style = TOAST_STYLES[toast.type || 'undo'];
         return (

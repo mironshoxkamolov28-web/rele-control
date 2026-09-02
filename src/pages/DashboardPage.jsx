@@ -44,7 +44,8 @@ export default function DashboardPage({ t, stats, stationRelays, visibleStations
             const expired = relays.filter((r) => r.stationId === s.id && getRelayStatusFromDate(r.nextCheck) === 'red').length;
             return (
               <button key={s.id} type="button" onClick={() => setViewStation(s.id)}
-                className="flex w-full items-center gap-4 rounded-xl bg-white/5 px-4 py-3 text-left transition hover:bg-white/10">
+                style={{ touchAction: 'manipulation' }}
+                className="flex w-full items-center gap-4 rounded-xl bg-white/5 px-4 py-3 text-left transition-colors duration-150 hover:bg-white/10 active:bg-white/15">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 text-xs font-bold">
                   {s.name.charAt(0)}
                 </div>

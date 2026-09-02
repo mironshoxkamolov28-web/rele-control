@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
 import { supabase, toRelay, fromRelay } from './supabase.js';
@@ -9,7 +9,7 @@ import {
   CSV_FIELD_I18N_KEYS, CSV_HEADER_TO_FIELD, navItems, RELAY_DIFF_FIELDS, buildRelayDiff,
   fetchAllRows,
 } from './relayHelpers.js';
-import { ConfirmModal, AppSidebar, ToastContainer, LanguageToggle, ThemeToggle } from './components';
+import { ConfirmModal, AppSidebar, ToastContainer, MobileBottomNav, LanguageToggle, ThemeToggle } from './components';
 
 // Pages
 import LoadingScreen from './pages/LoadingScreen.jsx';
@@ -45,7 +45,12 @@ import { MexanikStatsPanel } from './components';
 export default function RelayDashboard() {
   // ── Data ─────────────────────────────────────────────────────────────────
   const [stations, setStations] = useState([]);
-  const [relays, setRelays] = useState([]);
+  const [relays, setRelays] = useState(() => {
+    try {
+      const cached = localStorage.getItem('rc_relays_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
   const [loading, setLoading] = useState(true);
   const [publicRelay, setPublicRelay] = useState(null);
   const [uchastkalar, setUchastkalar] = useState([]);
@@ -165,21 +170,41 @@ export default function RelayDashboard() {
   useEffect(() => {
     const isPublicPage = /^\/relay\/\d+$/.test(window.location.pathname);
     if (isPublicPage) { setLoading(false); return; }
+
+    // Faqat kerakli ustunlar — tarmoq yukini kamaytiradi
+    const RELAY_COLS = 'id,station_id,name,num,stativ,last_check,next_check,note,object,manzil';
+
+    // 1-qadam: kichik jadvallar + birinchi 500 relay parallel yuklanadi
     Promise.all([
       supabase.from('stations').select('id,name,username,uchastka_id'),
-      fetchAllRows(supabase, 'relays', '*'),
+      supabase.from('relays').select(RELAY_COLS).range(0, 499),
       supabase.from('uchastkalar').select('*'),
       supabase.from('mexaniklar').select('id,name,username'),
-    ]).then(([{ data: stationsData }, { data: relaysData }, { data: uchastkalarData }, { data: mexaniklarData }]) => {
+    ]).then(([{ data: stationsData }, { data: firstRelays }, { data: uchastkalarData }, { data: mexaniklarData }]) => {
       if (stationsData) {
         setStations(stationsData);
         const firstStation = stationsData.find((s) => s.id !== 'admin');
         if (firstStation) setNewRelay((r) => ({ ...r, stationId: firstStation.id }));
       }
-      if (relaysData) setRelays(relaysData.map(toRelay));
+      if (firstRelays) setRelays(firstRelays.map(toRelay));
       if (uchastkalarData) setUchastkalar(uchastkalarData);
       if (mexaniklarData) setMexaniklar(mexaniklarData);
-      setLoading(false);
+      setLoading(false); // ← foydalanuvchi darhol ko'radi
+
+      // 2-qadam: 500 dan ortiq bo'lsa qolganlarini orqa fonda yuklaymiz
+      if (firstRelays && firstRelays.length === 500) {
+        fetchAllRows(supabase, 'relays', RELAY_COLS).then(({ data: allRelays }) => {
+          if (allRelays) {
+            const mapped = allRelays.map(toRelay);
+            setRelays(mapped);
+            try { localStorage.setItem('rc_relays_cache', JSON.stringify(mapped)); } catch {}
+          }
+        });
+      } else if (firstRelays) {
+        // 500 dan kam — hammasi keldi, cache'ga yozamiz
+        const mapped = firstRelays.map(toRelay);
+        try { localStorage.setItem('rc_relays_cache', JSON.stringify(mapped)); } catch {}
+      }
     });
   }, []);
 
@@ -252,52 +277,129 @@ export default function RelayDashboard() {
       .then(({ data }) => { setActivityLog(data || []); setActivityLogLoading(false); });
   }, [activeNav, auth]);
 
+  // ── History API (telefon "Orqaga" tugmasi) ─────────────────────────────
+  const isPopstateRef = useRef(false);
+  const prevModalOpenRef = useRef(false);
+
+  // Push history entry only when navigation state changes (not popstate-triggered)
+  useEffect(() => {
+    if (isPopstateRef.current) { isPopstateRef.current = false; return; }
+    const state = { nav: activeNav, vs: viewStation || null, vm: viewMexanik || null };
+    window.history.pushState(state, '');
+  }, [activeNav, viewStation, viewMexanik]);
+
+  // Push history entry only on the TRANSITION from closed → open for any modal
+  useEffect(() => {
+    const anyModalOpen = !!(selectedRelay || bulkEditOpen || editingStation || editingUchastka || editingMexanik || importModalOpen || qrPreviewRelay || globalSearchOpen || deleteStationId || deleteUchastkaId || deleteMexanikId);
+    if (anyModalOpen && !prevModalOpenRef.current) {
+      window.history.pushState({ modal: true }, '');
+    }
+    prevModalOpenRef.current = anyModalOpen;
+  }, [selectedRelay, bulkEditOpen, editingStation, editingUchastka, editingMexanik, importModalOpen, qrPreviewRelay, globalSearchOpen, deleteStationId, deleteUchastkaId, deleteMexanikId]);
+
+  // Set initial history state once on mount
+  useEffect(() => {
+    window.history.replaceState({ nav: activeNav, vs: viewStation || null, vm: viewMexanik || null }, '');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle back button
+  useEffect(() => {
+    const handlePopState = () => {
+      // 1. Close any open modal first
+      if (globalSearchOpen) { setGlobalSearchOpen(false); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (selectedRelay) { setIsDirty(false); setSelectedRelay(null); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (bulkEditOpen) { setBulkEditOpen(false); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (editingStation) { setIsDirty(false); setEditingStation(null); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (editingUchastka) { setIsDirty(false); setEditingUchastka(null); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (editingMexanik) { setIsDirty(false); setEditingMexanik(null); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (importModalOpen) { setImportModalOpen(false); setImportPreview(null); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (qrPreviewRelay) { setQrPreviewRelay(null); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (deleteStationId) { setDeleteStationId(null); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (deleteUchastkaId) { setDeleteUchastkaId(null); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (deleteMexanikId) { setDeleteMexanikId(null); window.history.pushState({ nav: activeNav }, ''); return; }
+
+      // 2. Close sidebar if open on mobile
+      if (sidebarOpen) { setSidebarOpen(false); window.history.pushState({ nav: activeNav }, ''); return; }
+
+      // 3. Go back from detail views
+      if (viewMexanikMonth !== null) { setViewMexanikMonth(null); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (viewMexanik && !auth?.isMexanik) { setViewMexanik(null); window.history.pushState({ nav: activeNav }, ''); return; }
+      if (viewStation) { setViewStation(null); window.history.pushState({ nav: activeNav }, ''); return; }
+
+      // 4. Navigate back to dashboard from sub-pages
+      if (activeNav !== 'dashboard') {
+        isPopstateRef.current = true;
+        setActiveNav('dashboard');
+        window.history.pushState({ nav: 'dashboard' }, '');
+        return;
+      }
+
+      // 5. Already on dashboard — push a new state to BLOCK the exit
+      window.history.pushState({ nav: 'dashboard' }, '');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [activeNav, viewStation, viewMexanik, viewMexanikMonth, sidebarOpen,
+      selectedRelay, bulkEditOpen, editingStation, editingUchastka, editingMexanik,
+      importModalOpen, qrPreviewRelay, globalSearchOpen,
+      deleteStationId, deleteUchastkaId, deleteMexanikId, auth]);
+
+
   // ── Computed values ───────────────────────────────────────────────────────
   const toggleTheme = () => setTheme((cur) => (cur === 'dark' ? 'light' : 'dark'));
   const cycleLang = () => setLang((cur) => LANGS[(LANGS.indexOf(cur) + 1) % LANGS.length]);
   const confirmDiscard = () => !isDirty || window.confirm(t('common.unsavedChangesConfirm'));
 
-  const stationRelays = relays
+  // ── Memoized computed values (har render qayta hisoblanmaydi) ─────────────
+  const stationRelays = useMemo(() => relays
     .map((r) => ({ ...r, status: getRelayStatusFromDate(r.nextCheck) }))
     .filter((relay) =>
       auth?.id === 'admin'
         ? adminFilterStation === 'all' ? true : relay.stationId === adminFilterStation
         : relay.stationId === auth?.id
-    );
+    ),
+  [relays, auth, adminFilterStation]);
 
-  const visibleRelays = stationRelays
+  const visibleRelays = useMemo(() => stationRelays
     .filter((r) => filterStatus === 'all' || r.status === filterStatus)
     .filter((r) => normalizeRelayName(r.name).includes(normalizeRelayName(searchQuery)) || r.num.includes(searchQuery))
     .sort((a, b) => {
       if (!a.nextCheck) return 1;
       if (!b.nextCheck) return -1;
       return new Date(a.nextCheck) - new Date(b.nextCheck);
-    });
+    }),
+  [stationRelays, filterStatus, searchQuery]);
 
   const relayPageCount = Math.max(1, Math.ceil(visibleRelays.length / relayPageSize));
-  const pagedRelays = visibleRelays.slice((relayPage - 1) * relayPageSize, relayPage * relayPageSize);
+  const pagedRelays = useMemo(() =>
+    visibleRelays.slice((relayPage - 1) * relayPageSize, relayPage * relayPageSize),
+  [visibleRelays, relayPage, relayPageSize]);
 
-  const stats = {
+  const stats = useMemo(() => ({
     total: stationRelays.length,
     expired: stationRelays.filter((r) => r.status === 'red').length,
     warning: stationRelays.filter((r) => r.status === 'yellow').length,
     active: stationRelays.filter((r) => r.status === 'green').length,
-  };
+  }), [stationRelays]);
 
-  const globalNameCounts = Object.values(
+  const globalNameCounts = useMemo(() => Object.values(
     stationRelays.reduce((acc, r) => {
       const key = normalizeRelayName(r.name) || '—';
       acc[key] = acc[key] || { name: key, count: 0 };
       acc[key].count += 1;
       return acc;
     }, {})
-  ).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  ).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+  [stationRelays]);
 
-  const visibleStations = auth?.id === 'admin'
-    ? stations.filter((s) => s.id !== 'admin')
-    : stations.filter((s) => s.id === auth?.id);
+  const visibleStations = useMemo(() =>
+    auth?.id === 'admin'
+      ? stations.filter((s) => s.id !== 'admin')
+      : stations.filter((s) => s.id === auth?.id),
+  [stations, auth]);
 
-  const monthlyPlanByStation = stations
+  const monthlyPlanByStation = useMemo(() => stations
     .filter((s) => s.id !== 'admin')
     .map((s) => ({
       station: s,
@@ -307,11 +409,18 @@ export default function RelayDashboard() {
         .filter((r) => r.status === 'yellow')
         .sort((a, b) => new Date(a.nextCheck) - new Date(b.nextCheck)),
     }))
-    .filter((g) => g.relays.length > 0);
+    .filter((g) => g.relays.length > 0),
+  [stations, relays]);
 
-  const visibleMexaniklar = mexaniklar.filter((m) => m.name.toLowerCase().includes(mexanikSearch.toLowerCase()));
-  const visibleUchastkalar = uchastkalar.filter((u) => u.name.toLowerCase().includes(uchastkaSearch.toLowerCase()));
-  const visibleMonthlyPlan = monthlyPlanByStation
+  const visibleMexaniklar = useMemo(() =>
+    mexaniklar.filter((m) => m.name.toLowerCase().includes(mexanikSearch.toLowerCase())),
+  [mexaniklar, mexanikSearch]);
+
+  const visibleUchastkalar = useMemo(() =>
+    uchastkalar.filter((u) => u.name.toLowerCase().includes(uchastkaSearch.toLowerCase())),
+  [uchastkalar, uchastkaSearch]);
+
+  const visibleMonthlyPlan = useMemo(() => monthlyPlanByStation
     .map((g) => {
       const q = monthlyPlanSearch.trim().toLowerCase();
       if (!q) return g;
@@ -319,12 +428,13 @@ export default function RelayDashboard() {
       const rs = stationMatches ? g.relays : g.relays.filter((r) => r.name.toLowerCase().includes(q) || r.num.includes(monthlyPlanSearch));
       return { ...g, relays: rs };
     })
-    .filter((g) => g.relays.length > 0);
+    .filter((g) => g.relays.length > 0),
+  [monthlyPlanByStation, monthlyPlanSearch]);
 
-  const getStationName = (id) => stations.find((s) => s.id === id)?.name || id;
-  const getUchastkaName = (id) => uchastkalar.find((u) => u.id === id)?.name || '—';
+  const getStationName = useMemo(() => (id) => stations.find((s) => s.id === id)?.name || id, [stations]);
+  const getUchastkaName = useMemo(() => (id) => uchastkalar.find((u) => u.id === id)?.name || '—', [uchastkalar]);
 
-  const globalSearchResults = (() => {
+  const globalSearchResults = useMemo(() => {
     const q = globalSearchQuery.trim().toLowerCase();
     if (!q) return null;
     return {
@@ -333,7 +443,7 @@ export default function RelayDashboard() {
       uchastkalar: uchastkalar.filter((u) => u.name.toLowerCase().includes(q)).slice(0, 6),
       mexaniklar: mexaniklar.filter((m) => m.name.toLowerCase().includes(q)).slice(0, 6),
     };
-  })();
+  }, [globalSearchQuery, relays, stations, uchastkalar, mexaniklar]);
 
   const importValidRows = importPreview && !importPreview.error ? importPreview.rows.filter((r) => r.name && r.num && r.stationId) : [];
   const importInvalidCount = importPreview && !importPreview.error ? importPreview.rows.length - importValidRows.length : 0;
@@ -343,54 +453,65 @@ export default function RelayDashboard() {
   );
 
   const viewStationData = viewStation ? stations.find((s) => s.id === viewStation) : null;
-  const viewStationRelays = relays
+  const viewStationRelays = useMemo(() => relays
     .filter((r) => r.stationId === viewStation)
     .map((r) => ({ ...r, status: getRelayStatusFromDate(r.nextCheck) }))
     .sort((a, b) => {
       if (!a.nextCheck) return 1;
       if (!b.nextCheck) return -1;
       return new Date(a.nextCheck) - new Date(b.nextCheck);
-    });
-  const viewStationStats = {
+    }),
+  [relays, viewStation]);
+  const viewStationStats = useMemo(() => ({
     total: viewStationRelays.length,
     expired: viewStationRelays.filter((r) => r.status === 'red').length,
     warning: viewStationRelays.filter((r) => r.status === 'yellow').length,
     active: viewStationRelays.filter((r) => r.status === 'green').length,
-  };
-  const viewStationNameCounts = Object.values(
+  }), [viewStationRelays]);
+  const viewStationNameCounts = useMemo(() => Object.values(
     viewStationRelays.reduce((acc, r) => {
       const key = normalizeRelayName(r.name) || '—';
       acc[key] = acc[key] || { name: key, count: 0 };
       acc[key].count += 1;
       return acc;
     }, {})
-  ).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  const filteredViewStationRelays = viewStationNameFilter
-    ? viewStationRelays.filter((r) => (normalizeRelayName(r.name) || '—') === viewStationNameFilter)
-    : viewStationRelays;
+  ).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+  [viewStationRelays]);
+  const filteredViewStationRelays = useMemo(() =>
+    viewStationNameFilter
+      ? viewStationRelays.filter((r) => (normalizeRelayName(r.name) || '—') === viewStationNameFilter)
+      : viewStationRelays,
+  [viewStationRelays, viewStationNameFilter]);
 
   const viewMexanikData = viewMexanik ? mexaniklar.find((m) => m.id === viewMexanik) : null;
-  const viewMexanikRelays = viewMexanikData
+  const viewMexanikRelays = useMemo(() => viewMexanikData
     ? relays
         .filter((r) => (r.note || '').split(',').map((s) => s.trim()).includes(viewMexanikData.name))
         .map((r) => ({ ...r, status: getRelayStatusFromDate(r.nextCheck) }))
         .sort((a, b) => (b.lastCheck || '').localeCompare(a.lastCheck || ''))
-    : [];
-  const viewMexanikMonthCounts = Object.values(
+    : [],
+  [viewMexanikData, relays]);
+  const viewMexanikMonthCounts = useMemo(() => Object.values(
     viewMexanikRelays.reduce((acc, r) => {
       const key = r.lastCheck ? r.lastCheck.slice(0, 7) : '';
       acc[key] = acc[key] || { month: key, count: 0 };
       acc[key].count += 1;
       return acc;
     }, {})
-  ).sort((a, b) => b.month.localeCompare(a.month));
+  ).sort((a, b) => b.month.localeCompare(a.month)),
+  [viewMexanikRelays]);
   const thisMonthKey = new Date().toISOString().slice(0, 7);
-  const viewMexanikThisMonthRelays = viewMexanikRelays.filter((r) => r.lastCheck && r.lastCheck.slice(0, 7) === thisMonthKey);
-  const viewMexanikMonthRelays = viewMexanikMonth !== null
+  const viewMexanikThisMonthRelays = useMemo(() =>
+    viewMexanikRelays.filter((r) => r.lastCheck && r.lastCheck.slice(0, 7) === thisMonthKey),
+  [viewMexanikRelays, thisMonthKey]);
+  const viewMexanikMonthRelays = useMemo(() => viewMexanikMonth !== null
     ? viewMexanikRelays.filter((r) => (r.lastCheck ? r.lastCheck.slice(0, 7) : '') === viewMexanikMonth)
-    : [];
+    : [],
+  [viewMexanikRelays, viewMexanikMonth]);
 
-  const filteredNav = navItems.filter((item) => (item.adminOnly ? auth?.id === 'admin' : true));
+  const filteredNav = useMemo(() =>
+    navItems.filter((item) => (item.adminOnly ? auth?.id === 'admin' : true)),
+  [auth]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const logActivity = async (action, entityType, entityLabel, details) => {
@@ -867,7 +988,7 @@ export default function RelayDashboard() {
           setGlobalSearchOpen={setGlobalSearchOpen} handleLogout={handleLogout}
         />
 
-        <main className="lg:ml-64 flex-1 pt-14 px-4 pb-4 lg:pt-6 lg:px-6 lg:pb-6 space-y-6">
+        <main className="lg:ml-64 flex-1 pt-14 px-4 lg:pt-6 lg:px-6 lg:pb-6 space-y-6 pb-safe-bottom">
           {viewStation ? (
             <StationDetailView
               t={t} auth={auth}
@@ -1076,6 +1197,13 @@ export default function RelayDashboard() {
         openGlobalSearchRelay={openGlobalSearchRelay} openGlobalSearchStation={openGlobalSearchStation}
         openGlobalSearchUchastka={openGlobalSearchUchastka} openGlobalSearchMexanik={openGlobalSearchMexanik}
         getStationName={getStationName}
+      />
+
+      <MobileBottomNav
+        t={t} auth={auth} activeNav={activeNav} setActiveNav={setActiveNav}
+        setSidebarOpen={setSidebarOpen} confirmDiscard={confirmDiscard}
+        setIsDirty={setIsDirty} setViewStation={setViewStation}
+        setViewMexanik={setViewMexanik} setViewMexanikMonth={setViewMexanikMonth}
       />
 
       <ToastContainer t={t} toasts={toasts} />
