@@ -110,15 +110,15 @@ export default function RelaysPage({
       </div>
 
       <div className="glass rounded-2xl p-3 sm:p-4">
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-          <div className="relative flex-1">
+        <div className="flex flex-col gap-2 sm:gap-3">
+          <div className="relative w-full">
             <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             <input type="text" value={searchQuery} placeholder={t('relays.searchPlaceholder')} className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10"
               onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full">
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-              className="flex-1 sm:flex-none rounded-xl border border-white/10 bg-white/5 px-3 sm:px-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50">
+              className="flex-1 min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50">
               <option value="all" className="bg-neutral-900 text-white">{t('filter.allStatus')}</option>
               <option value="red" className="bg-neutral-900 text-white">{t('status.red')}</option>
               <option value="yellow" className="bg-neutral-900 text-white">{t('status.yellow')}</option>
@@ -126,7 +126,7 @@ export default function RelaysPage({
             </select>
             {auth?.id === 'admin' && (
               <select value={adminFilterStation} onChange={(e) => setAdminFilterStation(e.target.value)}
-                className="flex-1 sm:flex-none rounded-xl border border-white/10 bg-white/5 px-3 sm:px-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50">
+                className="flex-1 min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition focus:border-amber-500/50">
                 <option value="all" className="bg-neutral-900 text-white">{t('filter.allStations')}</option>
                 {stations.filter((s) => s.id !== 'admin').map((s) => <option key={s.id} value={s.id} className="bg-neutral-900 text-white">{s.name}</option>)}
               </select>

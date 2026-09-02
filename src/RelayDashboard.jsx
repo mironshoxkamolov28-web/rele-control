@@ -988,7 +988,7 @@ export default function RelayDashboard() {
           setGlobalSearchOpen={setGlobalSearchOpen} handleLogout={handleLogout}
         />
 
-        <main className="lg:ml-64 flex-1 pt-14 px-4 lg:pt-6 lg:px-6 lg:pb-6 space-y-6 pb-safe-bottom">
+        <main className="lg:ml-64 flex-1 min-w-0 overflow-x-hidden pt-14 px-4 lg:pt-6 lg:px-6 lg:pb-6 space-y-6 pb-safe-bottom">
           {viewStation ? (
             <StationDetailView
               t={t} auth={auth}
