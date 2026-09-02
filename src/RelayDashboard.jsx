@@ -352,14 +352,32 @@ export default function RelayDashboard() {
   const confirmDiscard = () => !isDirty || window.confirm(t('common.unsavedChangesConfirm'));
 
   // ── Memoized computed values (har render qayta hisoblanmaydi) ─────────────
+
+  // KIP SMB va VA GR ZAMENA stansiyalarida muddati kelayotgan/o'tgan relelar
+  // dashboardda ko'rsatilmaydi — faqat yashil (aktiv) relelar ko'rinadi.
+  const HIDDEN_STATION_KEYWORDS = ['kip', 'zamena'];
+  const isHiddenStation = (stationId) => {
+    const station = stations.find((s) => s.id === stationId);
+    if (!station) return false;
+    const nameLower = station.name.toLowerCase();
+    return HIDDEN_STATION_KEYWORDS.some((kw) => nameLower.includes(kw));
+  };
+
   const stationRelays = useMemo(() => relays
     .map((r) => ({ ...r, status: getRelayStatusFromDate(r.nextCheck) }))
-    .filter((relay) =>
-      auth?.id === 'admin'
+    .filter((relay) => {
+      // Stansiya filtri (admin yoki oddiy foydalanuvchi)
+      const stationOk = auth?.id === 'admin'
         ? adminFilterStation === 'all' ? true : relay.stationId === adminFilterStation
-        : relay.stationId === auth?.id
-    ),
-  [relays, auth, adminFilterStation]);
+        : relay.stationId === auth?.id;
+      if (!stationOk) return false;
+      // KIP/ZAMENA stansiyalarida faqat qizil va sariq relelarni yashirish
+      if (isHiddenStation(relay.stationId) && (relay.status === 'red' || relay.status === 'yellow')) {
+        return false;
+      }
+      return true;
+    }),
+  [relays, auth, adminFilterStation, stations]);
 
   const visibleRelays = useMemo(() => stationRelays
     .filter((r) => filterStatus === 'all' || r.status === filterStatus)
