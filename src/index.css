@@ -8,6 +8,7 @@ html {
   scroll-behavior: smooth;
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
+  touch-action: pan-x pan-y; /* pinch-zoom oldini oladi */
 }
 
 body {
