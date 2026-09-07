@@ -9,7 +9,13 @@ import {
   CSV_FIELD_I18N_KEYS, CSV_HEADER_TO_FIELD, navItems, RELAY_DIFF_FIELDS, buildRelayDiff,
   fetchAllRows,
 } from './relayHelpers.js';
-import { ConfirmModal, AppSidebar, ToastContainer, MobileBottomNav, LanguageToggle, ThemeToggle } from './components';
+import { ConfirmModal, AppSidebar, ToastContainer, MobileBottomNav, LanguageToggle, ThemeToggle, OfflineBanner } from './components';
+import {
+  getLocalData, setLocalData, addToPendingQueue, createTempId, isTempId,
+  applyLocalInsert, applyLocalUpdate, applyLocalDelete, replaceTempId,
+  persistRelays, persistStations, persistUchastkalar, persistMexaniklar,
+} from './offlineStore.js';
+import { startAutoSync, stopAutoSync, syncPendingQueue, isOnline, onSyncComplete } from './syncManager.js';
 
 // Pages
 import LoadingScreen from './pages/LoadingScreen.jsx';
@@ -44,8 +50,11 @@ import { MexanikStatsPanel } from './components';
 
 export default function RelayDashboard() {
   // ── Data ─────────────────────────────────────────────────────────────────
-  const [stations, setStations] = useState([]);
+  const [stations, setStations] = useState(() => getLocalData('stations') || []);
   const [relays, setRelays] = useState(() => {
+    // offlineStore'dan oladi (rc_offline_relays), eski kesh bilan ham moslik
+    const offline = getLocalData('relays');
+    if (offline) return offline;
     try {
       const cached = localStorage.getItem('rc_relays_cache');
       return cached ? JSON.parse(cached) : [];
@@ -53,8 +62,10 @@ export default function RelayDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [publicRelay, setPublicRelay] = useState(null);
-  const [uchastkalar, setUchastkalar] = useState([]);
-  const [mexaniklar, setMexaniklar] = useState([]);
+  const [uchastkalar, setUchastkalar] = useState(() => getLocalData('uchastkalar') || []);
+  const [mexaniklar, setMexaniklar] = useState(() => getLocalData('mexaniklar') || []);
+  // Internet holati
+  const [online, setOnline] = useState(() => isOnline());
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   const [auth, setAuth] = useState(() => {
@@ -171,6 +182,12 @@ export default function RelayDashboard() {
     const isPublicPage = /^\/relay\/\d+$/.test(window.location.pathname);
     if (isPublicPage) { setLoading(false); return; }
 
+    // Internet yo'q bo'lsa — local keshdan yuklaymiz va darhol ko'rsatamiz
+    if (!navigator.onLine) {
+      setLoading(false);
+      return;
+    }
+
     // Faqat kerakli ustunlar — tarmoq yukini kamaytiradi
     const RELAY_COLS = 'id,station_id,name,num,stativ,last_check,next_check,note,object,manzil';
 
@@ -183,12 +200,23 @@ export default function RelayDashboard() {
     ]).then(([{ data: stationsData }, { data: firstRelays }, { data: uchastkalarData }, { data: mexaniklarData }]) => {
       if (stationsData) {
         setStations(stationsData);
+        persistStations(stationsData);
         const firstStation = stationsData.find((s) => s.id !== 'admin');
         if (firstStation) setNewRelay((r) => ({ ...r, stationId: firstStation.id }));
       }
-      if (firstRelays) setRelays(firstRelays.map(toRelay));
-      if (uchastkalarData) setUchastkalar(uchastkalarData);
-      if (mexaniklarData) setMexaniklar(mexaniklarData);
+      if (firstRelays) {
+        const mapped = firstRelays.map(toRelay);
+        setRelays(mapped);
+        persistRelays(mapped);
+      }
+      if (uchastkalarData) {
+        setUchastkalar(uchastkalarData);
+        persistUchastkalar(uchastkalarData);
+      }
+      if (mexaniklarData) {
+        setMexaniklar(mexaniklarData);
+        persistMexaniklar(mexaniklarData);
+      }
       setLoading(false); // ← foydalanuvchi darhol ko'radi
 
       // 2-qadam: 500 dan ortiq bo'lsa qolganlarini orqa fonda yuklaymiz
@@ -197,14 +225,13 @@ export default function RelayDashboard() {
           if (allRelays) {
             const mapped = allRelays.map(toRelay);
             setRelays(mapped);
-            try { localStorage.setItem('rc_relays_cache', JSON.stringify(mapped)); } catch {}
+            persistRelays(mapped);
           }
         });
-      } else if (firstRelays) {
-        // 500 dan kam — hammasi keldi, cache'ga yozamiz
-        const mapped = firstRelays.map(toRelay);
-        try { localStorage.setItem('rc_relays_cache', JSON.stringify(mapped)); } catch {}
       }
+    }).catch(() => {
+      // Tarmoq xatosi — local keshdan davom etamiz
+      setLoading(false);
     });
   }, []);
 
@@ -242,6 +269,29 @@ export default function RelayDashboard() {
 
   useEffect(() => {
     return () => { Object.values(toastTimersRef.current).forEach(clearTimeout); };
+  }, []);
+
+  // ── Online/Offline kuzatish va auto-sync ──────────────────────────────────
+  useEffect(() => {
+    const handleOnline = () => setOnline(true);
+    const handleOffline = () => setOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    startAutoSync();
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      stopAutoSync();
+    };
+  }, []);
+
+  // Sync tugaganda local relay ID'larini haqiqiy ID bilan yangilaymiz
+  useEffect(() => {
+    const unsub = onSyncComplete(({ tempIdMap }) => {
+      if (!tempIdMap || Object.keys(tempIdMap).length === 0) return;
+      setRelays((cur) => cur.map((r) => isTempId(r.id) && tempIdMap[r.id] ? { ...r, id: tempIdMap[r.id] } : r));
+    });
+    return unsub;
   }, []);
 
   useEffect(() => {
@@ -626,6 +676,24 @@ export default function RelayDashboard() {
 
   const handleSaveEdit = async () => {
     const before = relays.find((r) => r.id === selectedRelay.id);
+    // Darhol local state'ni yangilash
+    applyLocalUpdate(setRelays, selectedRelay.id, selectedRelay);
+    setRelays((cur) => { persistRelays(cur); return cur; });
+    const diff = buildRelayDiff(before, selectedRelay, getStationName);
+
+    if (!isOnline() || isTempId(selectedRelay.id)) {
+      // Offline — navbatga qo'shamiz
+      addToPendingQueue({
+        id: createTempId(),
+        table: 'relays',
+        op: 'update',
+        data: { ...selectedRelay },
+      });
+      pushToast(`${t('toast.saved')} (offline)`, 'success');
+      setIsDirty(false); setSelectedRelay(null);
+      return;
+    }
+
     const relay = fromRelay(selectedRelay);
     const { error } = await supabase.rpc('update_relay_anon', {
       p_id: selectedRelay.id,
@@ -640,8 +708,6 @@ export default function RelayDashboard() {
       p_manzil: relay.manzil || null,
     });
     if (error) { pushToast(error.message, 'error'); return; }
-    setRelays(relays.map((r) => r.id === selectedRelay.id ? { ...selectedRelay } : r));
-    const diff = buildRelayDiff(before, selectedRelay, getStationName);
     logActivity('update', 'relay', `${selectedRelay.name} (${selectedRelay.num})`, diff.length ? JSON.stringify(diff) : null);
     pushToast(t('toast.saved'), 'success');
     setIsDirty(false); setSelectedRelay(null);
@@ -666,10 +732,24 @@ export default function RelayDashboard() {
   };
 
   const handleAddRelay = async () => {
+    if (!isOnline()) {
+      // Offline — temp ID bilan local'ga saqlaymiz
+      const tempId = createTempId();
+      const tempRelay = { ...newRelay, id: tempId };
+      applyLocalInsert(setRelays, tempRelay);
+      setRelays((cur) => { persistRelays(cur); return cur; });
+      addToPendingQueue({ id: createTempId(), table: 'relays', op: 'insert', data: tempRelay });
+      setQrPreviewRelay(tempRelay);
+      setIsDirty(false);
+      setNewRelay({ stationId: newRelay.stationId, name: '', num: '', stativ: '', lastCheck: '', nextCheck: '', note: '' });
+      pushToast(`Rele qo'shildi (offline — sinkronlanadi)`, 'success');
+      return;
+    }
     const { data } = await supabase.from('relays').insert(fromRelay(newRelay)).select().single();
     if (data) {
       const added = toRelay(data);
-      setRelays([...relays, added]);
+      applyLocalInsert(setRelays, added);
+      setRelays((cur) => { persistRelays(cur); return cur; });
       setQrPreviewRelay(added);
       logActivity('create', 'relay', `${added.name} (${added.num})`);
     }
@@ -683,11 +763,18 @@ export default function RelayDashboard() {
     const newId = newStation.username.trim().toLowerCase().replace(/\s+/g, '-');
     if (stations.some((s) => s.id === newId)) { setStationFormError(t('errors.usernameTaken', newStation.username)); return; }
     const row = { id: newId, name: newStation.name, username: newStation.username, uchastka_id: newStation.uchastkaId || null };
+    applyLocalInsert(setStations, row);
+    setStations((cur) => { persistStations(cur); return cur; });
+    if (!isOnline()) {
+      addToPendingQueue({ id: createTempId(), table: 'stations', op: 'insert', data: { ...row, _password: newStation.password } });
+      logActivity('create', 'station', row.name);
+      setIsDirty(false); setNewStation({ name: '', username: '', password: '', uchastkaId: '' });
+      return;
+    }
     const { error } = await supabase.from('stations').insert(row);
-    if (error) { setStationFormError(error.message); return; }
+    if (error) { setStationFormError(error.message); applyLocalDelete(setStations, newId); return; }
     const { error: pwError } = await supabase.rpc('set_station_password', { p_id: newId, p_password: newStation.password });
     if (pwError) { setStationFormError(pwError.message); return; }
-    setStations([...stations, row]);
     logActivity('create', 'station', row.name);
     setIsDirty(false); setNewStation({ name: '', username: '', password: '', uchastkaId: '' });
   };
@@ -719,11 +806,26 @@ export default function RelayDashboard() {
   const handleDeleteRelay = (id) => {
     const relay = relays.find((r) => r.id === id);
     if (!relay) return;
-    setRelays((cur) => cur.filter((r) => r.id !== id));
+    applyLocalDelete(setRelays, id);
+    setRelays((cur) => { persistRelays(cur); return cur; });
     pushUndoToast(
       t('toast.deleted', `${relay.name} (${relay.num})`),
-      async () => { await supabase.from('relays').delete().eq('id', id); logActivity('delete', 'relay', `${relay.name} (${relay.num})`); },
-      () => setRelays((cur) => [...cur, relay]),
+      async () => {
+        if (isTempId(id)) {
+          // Hech qachon Supabase'ga kiritilmagan — navbatdan olib tashlash kifoya
+          return;
+        }
+        if (!isOnline()) {
+          addToPendingQueue({ id: createTempId(), table: 'relays', op: 'delete', data: { id } });
+          return;
+        }
+        await supabase.from('relays').delete().eq('id', id);
+        logActivity('delete', 'relay', `${relay.name} (${relay.num})`);
+      },
+      () => {
+        applyLocalInsert(setRelays, relay);
+        setRelays((cur) => { persistRelays(cur); return cur; });
+      },
     );
   };
 
@@ -749,9 +851,16 @@ export default function RelayDashboard() {
     const newId = newUchastka.name.trim().toLowerCase().replace(/\s+/g, '-');
     if (uchastkalar.some((u) => u.id === newId)) { setUchastkaFormError(t('errors.uchastkaExists', newUchastka.name)); return; }
     const row = { id: newId, name: newUchastka.name };
+    applyLocalInsert(setUchastkalar, row);
+    setUchastkalar((cur) => { persistUchastkalar(cur); return cur; });
+    if (!isOnline()) {
+      addToPendingQueue({ id: createTempId(), table: 'uchastkalar', op: 'insert', data: row });
+      logActivity('create', 'uchastka', row.name);
+      setIsDirty(false); setNewUchastka({ name: '' });
+      return;
+    }
     const { error } = await supabase.from('uchastkalar').insert(row);
-    if (error) { setUchastkaFormError(error.message); return; }
-    setUchastkalar([...uchastkalar, row]);
+    if (error) { setUchastkaFormError(error.message); applyLocalDelete(setUchastkalar, newId); return; }
     logActivity('create', 'uchastka', row.name);
     setIsDirty(false); setNewUchastka({ name: '' });
   };
@@ -759,9 +868,16 @@ export default function RelayDashboard() {
   const handleUpdateUchastka = async () => {
     if (!editingUchastka) return;
     const row = { id: editingUchastka.id, name: editingUchastka.name };
+    applyLocalUpdate(setUchastkalar, row.id, row);
+    setUchastkalar((cur) => { persistUchastkalar(cur); return cur; });
+    if (!isOnline()) {
+      addToPendingQueue({ id: createTempId(), table: 'uchastkalar', op: 'update', data: row });
+      logActivity('update', 'uchastka', row.name);
+      setIsDirty(false); setEditingUchastka(null);
+      return;
+    }
     const { error } = await supabase.from('uchastkalar').update(row).eq('id', row.id);
     if (error) return;
-    setUchastkalar(uchastkalar.map((u) => u.id === row.id ? row : u));
     logActivity('update', 'uchastka', row.name);
     setIsDirty(false); setEditingUchastka(null);
   };
@@ -788,13 +904,20 @@ export default function RelayDashboard() {
     const newId = newMexanik.name.trim().toLowerCase().replace(/\s+/g, '-');
     if (mexaniklar.some((m) => m.id === newId)) { setMexanikFormError(t('errors.mexanikExists', newMexanik.name)); return; }
     const row = { id: newId, name: newMexanik.name, username: newMexanik.username.trim() || null };
+    applyLocalInsert(setMexaniklar, row);
+    setMexaniklar((cur) => { persistMexaniklar(cur); return cur; });
+    if (!isOnline()) {
+      addToPendingQueue({ id: createTempId(), table: 'mexaniklar', op: 'insert', data: { ...row, _password: newMexanik.password.trim() || null } });
+      logActivity('create', 'mexanik', row.name);
+      setIsDirty(false); setNewMexanik({ name: '', username: '', password: '' });
+      return;
+    }
     const { error } = await supabase.from('mexaniklar').insert(row);
-    if (error) { setMexanikFormError(error.message); return; }
+    if (error) { setMexanikFormError(error.message); applyLocalDelete(setMexaniklar, newId); return; }
     if (newMexanik.username.trim() && newMexanik.password.trim()) {
       const { error: pwError } = await supabase.rpc('set_mexanik_password', { p_id: newId, p_password: newMexanik.password.trim() });
       if (pwError) { setMexanikFormError(pwError.message); return; }
     }
-    setMexaniklar([...mexaniklar, row]);
     logActivity('create', 'mexanik', row.name);
     setIsDirty(false); setNewMexanik({ name: '', username: '', password: '' });
   };
@@ -802,13 +925,20 @@ export default function RelayDashboard() {
   const handleUpdateMexanik = async () => {
     if (!editingMexanik) return;
     const row = { id: editingMexanik.id, name: editingMexanik.name, username: editingMexanik.username.trim() || null };
+    applyLocalUpdate(setMexaniklar, row.id, row);
+    setMexaniklar((cur) => { persistMexaniklar(cur); return cur; });
+    if (!isOnline()) {
+      addToPendingQueue({ id: createTempId(), table: 'mexaniklar', op: 'update', data: { ...row, _password: editingMexanik.password.trim() || null } });
+      logActivity('update', 'mexanik', row.name);
+      setIsDirty(false); setEditingMexanik(null);
+      return;
+    }
     const { error } = await supabase.from('mexaniklar').update(row).eq('id', row.id);
     if (error) return;
     if (editingMexanik.password.trim()) {
       const { error: pwError } = await supabase.rpc('set_mexanik_password', { p_id: row.id, p_password: editingMexanik.password.trim() });
       if (pwError) return;
     }
-    setMexaniklar(mexaniklar.map((m) => m.id === row.id ? row : m));
     logActivity('update', 'mexanik', row.name);
     setIsDirty(false); setEditingMexanik(null);
   };
@@ -970,6 +1100,9 @@ export default function RelayDashboard() {
   // ── Main layout ───────────────────────────────────────────────────────────
   return (
     <div className="bg-slate-950 text-slate-100 min-h-screen font-sans transition-colors duration-300">
+      {/* Offline/Online status banner */}
+      <OfflineBanner />
+
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-amber-500/10 blur-[120px] animate-float" />
         <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-[120px] animate-float" style={{ animationDelay: '-3s' }} />

@@ -8,3 +8,4 @@ export { MexanikStatsPanel } from './MexanikStatsPanel.jsx';
 export { default as AppSidebar } from './AppSidebar.jsx';
 export { default as ToastContainer } from './ToastContainer.jsx';
 export { default as MobileBottomNav } from './MobileBottomNav.jsx';
+export { OfflineBanner } from './OfflineBanner.jsx';

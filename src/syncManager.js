@@ -1,0 +1,255 @@
+// ── syncManager.js ────────────────────────────────────────────────────────────
+// Pending queue'dagi amallarni Supabase'ga yuborish va internet holatini kuzatish.
+// Internet qayta ulanganda avtomatik ishga tushadi.
+
+import { supabase, fromRelay } from './supabase.js';
+import {
+  getPendingQueue,
+  removePendingItem,
+  clearPendingQueue,
+  isTempId,
+} from './offlineStore.js';
+
+// ── Sync callback registratsiyasi ─────────────────────────────────────────────
+// Sync tugaganda UI'ni yangilash uchun callback'lar ro'yxati
+const syncCallbacks = new Set();
+
+export function onSyncComplete(cb) {
+  syncCallbacks.add(cb);
+  return () => syncCallbacks.delete(cb); // unsubscribe
+}
+
+function notifySyncComplete(result) {
+  syncCallbacks.forEach((cb) => {
+    try { cb(result); } catch {}
+  });
+}
+
+// ── Pending queue'ni yuborish ─────────────────────────────────────────────────
+
+export async function syncPendingQueue() {
+  const queue = getPendingQueue();
+  if (queue.length === 0) return { synced: 0, failed: 0 };
+
+  let synced = 0;
+  let failed = 0;
+  // temp_id → real_id xaritasi: bir seansdagi insert'lardan hosil bo'lgan
+  const tempIdMap = {};
+
+  for (const item of queue) {
+    try {
+      let success = false;
+
+      if (item.table === 'relays') {
+        success = await syncRelayOp(item, tempIdMap);
+      } else if (item.table === 'stations') {
+        success = await syncStationOp(item, tempIdMap);
+      } else if (item.table === 'uchastkalar') {
+        success = await syncUchastkaOp(item, tempIdMap);
+      } else if (item.table === 'mexaniklar') {
+        success = await syncMexanikOp(item, tempIdMap);
+      } else {
+        // Noma'lum jadval — o'tkazib yuboramiz
+        removePendingItem(item.id);
+        continue;
+      }
+
+      if (success) {
+        removePendingItem(item.id);
+        synced++;
+      } else {
+        failed++;
+      }
+    } catch (err) {
+      console.warn('[syncManager] item failed:', item, err);
+      failed++;
+    }
+  }
+
+  notifySyncComplete({ synced, failed, tempIdMap });
+  return { synced, failed, tempIdMap };
+}
+
+// ── Relay operatsiyalari ──────────────────────────────────────────────────────
+
+async function syncRelayOp(item, tempIdMap) {
+  const { op, data } = item;
+
+  if (op === 'insert') {
+    // Temp ID bilan saqlangan — haqiqiy ID kerak
+    const payload = { ...data };
+    delete payload.id; // Supabase o'zi beradi
+
+    const { data: inserted, error } = await supabase
+      .from('relays')
+      .insert(fromRelay(payload))
+      .select()
+      .single();
+
+    if (error) { console.warn('[sync] relay insert error:', error); return false; }
+    // Temp ID → Real ID xaritasiga qo'shamiz
+    if (data.id) tempIdMap[data.id] = inserted.id;
+    return true;
+  }
+
+  if (op === 'update') {
+    // Agar ID hali temp bo'lsa (keyinroq insert kelishi kutilgan), skip
+    const realId = isTempId(data.id) ? tempIdMap[data.id] : data.id;
+    if (!realId) return false;
+
+    const { error } = await supabase.rpc('update_relay_anon', {
+      p_id: realId,
+      p_station_id: data.stationId,
+      p_name: data.name,
+      p_num: data.num,
+      p_stativ: data.stativ || null,
+      p_last_check: data.lastCheck || null,
+      p_next_check: data.nextCheck || null,
+      p_note: data.note || null,
+      p_object: data.object || null,
+      p_manzil: data.manzil || null,
+    });
+    if (error) { console.warn('[sync] relay update error:', error); return false; }
+    return true;
+  }
+
+  if (op === 'delete') {
+    const realId = isTempId(data.id) ? tempIdMap[data.id] : data.id;
+    if (!realId) return true; // Temp edi, hech qachon Supabase'ga kiritilmagan
+    const { error } = await supabase.from('relays').delete().eq('id', realId);
+    if (error) { console.warn('[sync] relay delete error:', error); return false; }
+    return true;
+  }
+
+  return false;
+}
+
+// ── Station operatsiyalari ────────────────────────────────────────────────────
+
+async function syncStationOp(item, _tempIdMap) {
+  const { op, data } = item;
+
+  if (op === 'insert') {
+    const { error: insErr } = await supabase.from('stations').insert({
+      id: data.id, name: data.name, username: data.username, uchastka_id: data.uchastka_id || null,
+    });
+    if (insErr) { console.warn('[sync] station insert error:', insErr); return false; }
+    if (data._password) {
+      await supabase.rpc('set_station_password', { p_id: data.id, p_password: data._password });
+    }
+    return true;
+  }
+
+  if (op === 'update') {
+    const { error } = await supabase.from('stations')
+      .update({ name: data.name, username: data.username, uchastka_id: data.uchastka_id || null })
+      .eq('id', data.id);
+    if (error) { console.warn('[sync] station update error:', error); return false; }
+    if (data._password) {
+      await supabase.rpc('set_station_password', { p_id: data.id, p_password: data._password });
+    }
+    return true;
+  }
+
+  if (op === 'delete') {
+    await supabase.from('relays').delete().eq('station_id', data.id);
+    await supabase.from('stations').delete().eq('id', data.id);
+    return true;
+  }
+
+  return false;
+}
+
+// ── Uchastka operatsiyalari ───────────────────────────────────────────────────
+
+async function syncUchastkaOp(item, _tempIdMap) {
+  const { op, data } = item;
+
+  if (op === 'insert') {
+    const { error } = await supabase.from('uchastkalar').insert({ id: data.id, name: data.name });
+    if (error) { console.warn('[sync] uchastka insert error:', error); return false; }
+    return true;
+  }
+
+  if (op === 'update') {
+    const { error } = await supabase.from('uchastkalar').update({ name: data.name }).eq('id', data.id);
+    if (error) { console.warn('[sync] uchastka update error:', error); return false; }
+    return true;
+  }
+
+  if (op === 'delete') {
+    await supabase.from('stations').update({ uchastka_id: null }).eq('uchastka_id', data.id);
+    await supabase.from('uchastkalar').delete().eq('id', data.id);
+    return true;
+  }
+
+  return false;
+}
+
+// ── Mexanik operatsiyalari ────────────────────────────────────────────────────
+
+async function syncMexanikOp(item, _tempIdMap) {
+  const { op, data } = item;
+
+  if (op === 'insert') {
+    const { error } = await supabase.from('mexaniklar').insert({
+      id: data.id, name: data.name, username: data.username || null,
+    });
+    if (error) { console.warn('[sync] mexanik insert error:', error); return false; }
+    if (data._password) {
+      await supabase.rpc('set_mexanik_password', { p_id: data.id, p_password: data._password });
+    }
+    return true;
+  }
+
+  if (op === 'update') {
+    const { error } = await supabase.from('mexaniklar')
+      .update({ name: data.name, username: data.username || null })
+      .eq('id', data.id);
+    if (error) { console.warn('[sync] mexanik update error:', error); return false; }
+    if (data._password) {
+      await supabase.rpc('set_mexanik_password', { p_id: data.id, p_password: data._password });
+    }
+    return true;
+  }
+
+  if (op === 'delete') {
+    await supabase.from('mexaniklar').delete().eq('id', data.id);
+    return true;
+  }
+
+  return false;
+}
+
+// ── Internet holati kuzatish ──────────────────────────────────────────────────
+
+let autoSyncEnabled = false;
+let autoSyncHandler = null;
+
+export function startAutoSync() {
+  if (autoSyncEnabled) return;
+  autoSyncEnabled = true;
+
+  autoSyncHandler = async () => {
+    console.log('[syncManager] Online — syncing pending queue...');
+    await syncPendingQueue();
+  };
+
+  window.addEventListener('online', autoSyncHandler);
+
+  // Sahifa yuklanganda ham sinab ko'ramiz
+  if (navigator.onLine && getPendingQueue().length > 0) {
+    syncPendingQueue();
+  }
+}
+
+export function stopAutoSync() {
+  if (!autoSyncEnabled || !autoSyncHandler) return;
+  window.removeEventListener('online', autoSyncHandler);
+  autoSyncEnabled = false;
+  autoSyncHandler = null;
+}
+
+export function isOnline() {
+  return navigator.onLine;
+}
