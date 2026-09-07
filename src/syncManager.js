@@ -221,35 +221,61 @@ async function syncMexanikOp(item, _tempIdMap) {
   return false;
 }
 
-// ── Internet holati kuzatish ──────────────────────────────────────────────────
+// ── Internet holati kuzatish (ping-based) ────────────────────────────────────
+
+const PING_URL = 'https://vebhjxwzpqdwxbtquyth.supabase.co/rest/v1/?apikey=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlYmhqeHd6cHFkd3hidHF1eXRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MDI4MTAsImV4cCI6MjA5ODM3ODgxMH0.ToxFuUZtKm35SWmdtzpeIKISdA8LCAymlVcoZIqOUl0';
+
+async function pingServer() {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(PING_URL, { method: 'HEAD', signal: controller.signal, cache: 'no-store' });
+    clearTimeout(timer);
+    return res.ok || res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
+let _reallyOnline = true; // so'nggi ping natijasi
+
+export function isOnline() {
+  return _reallyOnline;
+}
 
 let autoSyncEnabled = false;
-let autoSyncHandler = null;
+let autoSyncInterval = null;
 
 export function startAutoSync() {
   if (autoSyncEnabled) return;
   autoSyncEnabled = true;
 
-  autoSyncHandler = async () => {
-    console.log('[syncManager] Online — syncing pending queue...');
-    await syncPendingQueue();
-  };
+  async function tick() {
+    const online = await pingServer();
+    const wasOnline = _reallyOnline;
+    _reallyOnline = online;
 
-  window.addEventListener('online', autoSyncHandler);
+    // Offline → Online o'tish: queue yuborish
+    if (online && !wasOnline) {
+      console.log('[syncManager] Connectivity restored — syncing...');
+      await syncPendingQueue();
+    }
 
-  // Sahifa yuklanganda ham sinab ko'ramiz
-  if (navigator.onLine && getPendingQueue().length > 0) {
-    syncPendingQueue();
+    // Sahifa yangi yuklanganda ham sinab ko'ramiz
+    if (online && getPendingQueue().length > 0 && wasOnline) {
+      await syncPendingQueue();
+    }
   }
+
+  // Darhol birinchi tekshiruv
+  tick();
+
+  // Har 5 soniyada
+  autoSyncInterval = setInterval(tick, 5000);
 }
 
 export function stopAutoSync() {
-  if (!autoSyncEnabled || !autoSyncHandler) return;
-  window.removeEventListener('online', autoSyncHandler);
+  if (!autoSyncEnabled) return;
+  if (autoSyncInterval) { clearInterval(autoSyncInterval); autoSyncInterval = null; }
   autoSyncEnabled = false;
-  autoSyncHandler = null;
-}
-
-export function isOnline() {
-  return navigator.onLine;
 }
