@@ -3,7 +3,9 @@ import { getPendingQueue } from '../offlineStore.js';
 import { onSyncComplete } from '../syncManager.js';
 
 // Supabase health endpoint — haqiqiy internet bor-yo'qligini tekshiradi
-const PING_URL = 'https://vebhjxwzpqdwxbtquyth.supabase.co/rest/v1/?apikey=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlYmhqeHd6cHFkd3hidHF1eXRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MDI4MTAsImV4cCI6MjA5ODM3ODgxMH0.ToxFuUZtKm35SWmdtzpeIKISdA8LCAymlVcoZIqOUl0';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const PING_URL = `${SUPABASE_URL}/rest/v1/?apikey=${SUPABASE_KEY}`;
 const PING_INTERVAL = 4000; // har 4 soniya
 const PING_TIMEOUT = 3000;  // 3 soniya kutish
 
