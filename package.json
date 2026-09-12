@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron:start": "electron .",
-    "electron:build": "electron-builder"
+    "electron:build": "vite build && electron-builder"
   },
   "dependencies": {
     "@capacitor/core": "^8.4.2",
@@ -38,7 +38,8 @@
       "output": "release"
     },
     "files": [
-      "electron/**/*"
+      "electron/**/*",
+      "dist/**/*"
     ],
     "win": {
       "target": "nsis",

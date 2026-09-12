@@ -1,6 +1,5 @@
 const { app, BrowserWindow, Menu } = require('electron');
-
-const APP_URL = 'https://relenazorat.vercel.app';
+const path = require('path');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -17,8 +16,9 @@ function createWindow() {
     },
   });
 
-  Menu.setApplicationMenu(null);
-  win.loadURL(APP_URL);
+  Menu.setApplicationMenu(Menu.buildFromTemplate([]));
+  // Local build'ni yuklash — internet bo'lmasa ham ishlaydi
+  win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
 
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 }

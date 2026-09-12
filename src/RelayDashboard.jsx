@@ -694,22 +694,33 @@ export default function RelayDashboard() {
       return;
     }
 
-    const relay = fromRelay(selectedRelay);
-    const { error } = await supabase.rpc('update_relay_anon', {
-      p_id: selectedRelay.id,
-      p_station_id: relay.station_id,
-      p_name: relay.name,
-      p_num: relay.num,
-      p_stativ: relay.stativ || null,
-      p_last_check: relay.last_check || null,
-      p_next_check: relay.next_check || null,
-      p_note: relay.note || null,
-      p_object: relay.object || null,
-      p_manzil: relay.manzil || null,
-    });
-    if (error) { pushToast(error.message, 'error'); return; }
-    logActivity('update', 'relay', `${selectedRelay.name} (${selectedRelay.num})`, diff.length ? JSON.stringify(diff) : null);
-    pushToast(t('toast.saved'), 'success');
+    try {
+      const relay = fromRelay(selectedRelay);
+      const { error } = await supabase.rpc('update_relay_anon', {
+        p_id: selectedRelay.id,
+        p_station_id: relay.station_id,
+        p_name: relay.name,
+        p_num: relay.num,
+        p_stativ: relay.stativ || null,
+        p_last_check: relay.last_check || null,
+        p_next_check: relay.next_check || null,
+        p_note: relay.note || null,
+        p_object: relay.object || null,
+        p_manzil: relay.manzil || null,
+      });
+      if (error) throw error;
+      logActivity('update', 'relay', `${selectedRelay.name} (${selectedRelay.num})`, diff.length ? JSON.stringify(diff) : null);
+      pushToast(t('toast.saved'), 'success');
+    } catch {
+      // Tarmoq xatosi — offline navbatga qo'shamiz (ma'lumot yo'qolmaydi)
+      addToPendingQueue({
+        id: createTempId(),
+        table: 'relays',
+        op: 'update',
+        data: { ...selectedRelay },
+      });
+      pushToast(`${t('toast.saved')} (offline — keyinroq sinkronlanadi)`, 'success');
+    }
     setIsDirty(false); setSelectedRelay(null);
   };
 

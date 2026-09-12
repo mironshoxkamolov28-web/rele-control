@@ -243,8 +243,20 @@ export function isOnline() {
   return _reallyOnline;
 }
 
+// Tashqaridan darhol sync qilish uchun
+export async function triggerSync() {
+  const online = await pingServer();
+  _reallyOnline = online;
+  if (online && getPendingQueue().length > 0) {
+    console.log('[syncManager] Manual sync triggered...');
+    await syncPendingQueue();
+  }
+}
+
 let autoSyncEnabled = false;
 let autoSyncInterval = null;
+let _onlineHandler = null;
+let _offlineHandler = null;
 
 export function startAutoSync() {
   if (autoSyncEnabled) return;
@@ -267,15 +279,35 @@ export function startAutoSync() {
     }
   }
 
+  // Browser online/offline eventlarini tinglash — darhol react qilish uchun
+  _offlineHandler = () => {
+    _reallyOnline = false;
+    console.log('[syncManager] Browser reports offline');
+  };
+  _onlineHandler = async () => {
+    console.log('[syncManager] Browser reports online — syncing...');
+    // Darhol ping qilib, queue'ni yuboramiz
+    const online = await pingServer();
+    _reallyOnline = online;
+    if (online && getPendingQueue().length > 0) {
+      await syncPendingQueue();
+    }
+  };
+  window.addEventListener('online', _onlineHandler);
+  window.addEventListener('offline', _offlineHandler);
+
   // Darhol birinchi tekshiruv
   tick();
 
-  // Har 5 soniyada
-  autoSyncInterval = setInterval(tick, 5000);
+  // Har 30 soniyada (batareya tejash uchun 5s dan oshirildi)
+  autoSyncInterval = setInterval(tick, 30000);
 }
 
 export function stopAutoSync() {
   if (!autoSyncEnabled) return;
   if (autoSyncInterval) { clearInterval(autoSyncInterval); autoSyncInterval = null; }
+  if (_onlineHandler) { window.removeEventListener('online', _onlineHandler); _onlineHandler = null; }
+  if (_offlineHandler) { window.removeEventListener('offline', _offlineHandler); _offlineHandler = null; }
   autoSyncEnabled = false;
 }
+
