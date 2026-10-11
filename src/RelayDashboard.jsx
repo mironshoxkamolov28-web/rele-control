@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
+import * as XLSX from 'xlsx';
 import { supabase, toRelay, fromRelay } from './supabase.js';
 import { LANGS, createTranslator, formatMonth } from './i18n.js';
 import {
@@ -14,6 +15,7 @@ import {
   getLocalData, setLocalData, addToPendingQueue, createTempId, isTempId,
   applyLocalInsert, applyLocalUpdate, applyLocalDelete, replaceTempId,
   persistRelays, persistStations, persistUchastkalar, persistMexaniklar,
+  encodePassword,
 } from './offlineStore.js';
 import { startAutoSync, stopAutoSync, syncPendingQueue, isOnline, onSyncComplete } from './syncManager.js';
 
@@ -79,6 +81,7 @@ export default function RelayDashboard() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
 
   // ── UI ────────────────────────────────────────────────────────────────────
   const [theme, setTheme] = useState(() => {
@@ -87,7 +90,7 @@ export default function RelayDashboard() {
   const [lang, setLang] = useState(() => {
     try { return localStorage.getItem('rc_lang') || 'uz'; } catch { return 'uz'; }
   });
-  const t = createTranslator(lang);
+  const t = useMemo(() => createTranslator(lang), [lang]);
   const [activeNav, setActiveNav] = useState(() => {
     try { return localStorage.getItem('rc_active_nav') || 'dashboard'; } catch { return 'dashboard'; }
   });
@@ -285,9 +288,10 @@ export default function RelayDashboard() {
     };
   }, []);
 
-  // Sync tugaganda local relay ID'larini haqiqiy ID bilan yangilaymiz
+  // Sync tugaganda: 1) online holatni yangilaymiz 2) temp ID'larni almashtiramiz
   useEffect(() => {
     const unsub = onSyncComplete(({ tempIdMap }) => {
+      setOnline(isOnline()); // syncManager ping natijasiga moslaymiz
       if (!tempIdMap || Object.keys(tempIdMap).length === 0) return;
       setRelays((cur) => cur.map((r) => isTempId(r.id) && tempIdMap[r.id] ? { ...r, id: tempIdMap[r.id] } : r));
     });
@@ -638,6 +642,10 @@ export default function RelayDashboard() {
 
   const handleLogin = async (event) => {
     event.preventDefault();
+    if (loginLoading) return;
+    setLoginLoading(true);
+    setLoginError('');
+    try {
     if (loginStation.startsWith('mexanik:')) {
       const mexId = loginStation.slice('mexanik:'.length);
       const { data, error } = await supabase.rpc('verify_mexanik_login', { p_id: mexId, p_username: loginUsername, p_password: loginPassword });
@@ -664,6 +672,11 @@ export default function RelayDashboard() {
     setAuth(station);
     try { localStorage.setItem('rc_auth', JSON.stringify({ id: station.id, name: station.name })); } catch {}
     setLoginError(''); setSearchQuery(''); setFilterStatus('all'); setSelectedRelay(null); setActiveNav('dashboard');
+    } catch {
+      setLoginError(t('login.error'));
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -733,8 +746,31 @@ export default function RelayDashboard() {
     if (bulkEdit.applyNote) { dbUpdates.note = bulkEdit.note || null; localUpdates.note = bulkEdit.note; }
     if (Object.keys(dbUpdates).length === 0) return;
     const ids = selectedRelayIds;
-    await supabase.from('relays').update(dbUpdates).in('id', ids);
+
+    // Darhol local state yangilaymiz (optimistic update)
     setRelays((cur) => cur.map((r) => ids.includes(r.id) ? { ...r, ...localUpdates } : r));
+    setRelays((cur) => { persistRelays(cur); return cur; });
+
+    if (!isOnline()) {
+      // Offline — har bir relay uchun navbatga qo'shamiz
+      ids.forEach((relayId) => {
+        addToPendingQueue({ id: createTempId(), table: 'relays', op: 'bulk-update', data: { id: relayId, updates: dbUpdates, localUpdates } });
+      });
+      pushToast(`${t('toast.saved')} (offline)`, 'success');
+    } else {
+      try {
+        const { error } = await supabase.from('relays').update(dbUpdates).in('id', ids);
+        if (error) throw error;
+        pushToast(t('toast.saved'), 'success');
+      } catch (err) {
+        // Server xatosi — offline navbatga qo'shamiz
+        ids.forEach((relayId) => {
+          addToPendingQueue({ id: createTempId(), table: 'relays', op: 'bulk-update', data: { id: relayId, updates: dbUpdates, localUpdates } });
+        });
+        pushToast(`${t('toast.saved')} (offline — keyinroq sinkronlanadi)`, 'success');
+      }
+    }
+
     const bulkChanges = RELAY_DIFF_FIELDS.filter((f) => f.key in localUpdates)
       .map((f) => ({ field: f.key, after: f.key === 'stationId' ? getStationName(localUpdates[f.key]) : localUpdates[f.key] }));
     logActivity('update', 'relay', t('bulkEdit.logLabel', ids.length), bulkChanges.length ? JSON.stringify(bulkChanges) : null);
@@ -777,7 +813,7 @@ export default function RelayDashboard() {
     applyLocalInsert(setStations, row);
     setStations((cur) => { persistStations(cur); return cur; });
     if (!isOnline()) {
-      addToPendingQueue({ id: createTempId(), table: 'stations', op: 'insert', data: { ...row, _password: newStation.password } });
+      addToPendingQueue({ id: createTempId(), table: 'stations', op: 'insert', data: { ...row, _password: encodePassword(newStation.password) } });
       logActivity('create', 'station', row.name);
       setIsDirty(false); setNewStation({ name: '', username: '', password: '', uchastkaId: '' });
       return;
@@ -800,7 +836,7 @@ export default function RelayDashboard() {
     if (oldId !== newId) {
       const { error: renameError } = await supabase.rpc('rename_station', { p_old_id: oldId, p_new_id: newId, p_name: row.name, p_username: row.username, p_uchastka_id: row.uchastka_id });
       if (renameError) { setStationFormError(renameError.message); return; }
-      setRelays(relays.map((r) => r.stationId === oldId ? { ...r, stationId: newId } : r));
+      setRelays((cur) => cur.map((r) => r.stationId === oldId ? { ...r, stationId: newId } : r));
     } else {
       const { error } = await supabase.from('stations').update({ name: row.name, username: row.username, uchastka_id: row.uchastka_id }).eq('id', oldId);
       if (error) { setStationFormError(error.message); return; }
@@ -809,7 +845,7 @@ export default function RelayDashboard() {
       const { error: pwError } = await supabase.rpc('set_station_password', { p_id: newId, p_password: editingStation.password.trim() });
       if (pwError) { setStationFormError(pwError.message); return; }
     }
-    setStations(stations.map((s) => s.id === oldId ? row : s));
+    setStations((cur) => cur.map((s) => s.id === oldId ? row : s));
     logActivity('update', 'station', row.name);
     setIsDirty(false); setEditingStation(null);
   };
@@ -918,7 +954,7 @@ export default function RelayDashboard() {
     applyLocalInsert(setMexaniklar, row);
     setMexaniklar((cur) => { persistMexaniklar(cur); return cur; });
     if (!isOnline()) {
-      addToPendingQueue({ id: createTempId(), table: 'mexaniklar', op: 'insert', data: { ...row, _password: newMexanik.password.trim() || null } });
+      addToPendingQueue({ id: createTempId(), table: 'mexaniklar', op: 'insert', data: { ...row, _password: encodePassword(newMexanik.password.trim()) } });
       logActivity('create', 'mexanik', row.name);
       setIsDirty(false); setNewMexanik({ name: '', username: '', password: '' });
       return;
@@ -939,7 +975,7 @@ export default function RelayDashboard() {
     applyLocalUpdate(setMexaniklar, row.id, row);
     setMexaniklar((cur) => { persistMexaniklar(cur); return cur; });
     if (!isOnline()) {
-      addToPendingQueue({ id: createTempId(), table: 'mexaniklar', op: 'update', data: { ...row, _password: editingMexanik.password.trim() || null } });
+      addToPendingQueue({ id: createTempId(), table: 'mexaniklar', op: 'update', data: { ...row, _password: encodePassword(editingMexanik.password.trim()) } });
       logActivity('update', 'mexanik', row.name);
       setIsDirty(false); setEditingMexanik(null);
       return;
@@ -975,7 +1011,11 @@ export default function RelayDashboard() {
     doc.text(`Rele-Control — ${auth?.id === 'admin' ? 'ADMIN hisobot' : auth?.name || 'Hisobot'}`, 14, 16);
     doc.setFontSize(10);
     let y = 30;
-    stationRelays.forEach((r, i) => { doc.text(`${i + 1}. ${r.name} (${r.num}) | ${r.nextCheck} [${r.status.toUpperCase()}]`, 14, y); y += 8; });
+    stationRelays.forEach((r, i) => {
+      if (y > 280) { doc.addPage(); y = 20; }
+      doc.text(`${i + 1}. ${r.name} (${r.num}) | ${r.nextCheck || '—'} [${r.status.toUpperCase()}]`, 14, y);
+      y += 8;
+    });
     doc.save('rele-hisobot.pdf');
   };
 
@@ -987,6 +1027,14 @@ export default function RelayDashboard() {
     downloadTextFile('relelar.csv', csv);
   };
 
+  const exportRelaysToExcel = () => {
+    const rows = visibleRelays.map((r) => [r.name, r.num, getStationName(r.stationId), r.stativ, r.lastCheck, r.nextCheck, r.note]);
+    const worksheet = XLSX.utils.aoa_to_sheet([csvHeaders, ...rows]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Relelar');
+    XLSX.writeFile(workbook, 'relelar.xlsx');
+  };
+
   const downloadRelayImportTemplate = () => {
     const example = ['RPU-3', '12345', stations.find((s) => s.id !== 'admin')?.name || '', '1-2', '2026-01-15', '2026-07-15', ''];
     const csv = [csvHeaders, example].map((row) => row.map(csvEscape).join(',')).join('\r\n');
@@ -994,8 +1042,20 @@ export default function RelayDashboard() {
   };
 
   const handleRelayImportFile = async (file) => {
-    const text = await file.text();
-    const rows = parseCSV(text);
+    const ext = file.name.split('.').pop().toLowerCase();
+    let rows;
+    if (ext === 'xlsx' || ext === 'xls') {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }).map(
+        (row) => row.map((cell) => String(cell ?? ''))
+      ).filter((r) => r.some((c) => c.trim() !== ''));
+    } else {
+      const text = await file.text();
+      rows = parseCSV(text);
+    }
     if (rows.length < 2) { setImportPreview({ error: t('bulkImport.emptyFile'), rows: [] }); setImportModalOpen(true); return; }
     const headerRow = rows[0].map((h) => h.trim().toLowerCase());
     const fieldIndexes = {};
@@ -1091,6 +1151,7 @@ export default function RelayDashboard() {
         loginPassword={loginPassword} setLoginPassword={setLoginPassword}
         showLoginPassword={showLoginPassword} setShowLoginPassword={setShowLoginPassword}
         loginError={loginError} handleLogin={handleLogin}
+        loginLoading={loginLoading}
       />
     );
   }
@@ -1215,7 +1276,7 @@ export default function RelayDashboard() {
                   relayPage={relayPage} setRelayPage={setRelayPage}
                   relayPageCount={relayPageCount} relayPageSize={relayPageSize} setRelayPageSize={setRelayPageSize}
                   importFileInputRef={importFileInputRef} handleRelayImportFile={handleRelayImportFile}
-                  exportToPDF={exportToPDF} exportRelaysToCSV={exportRelaysToCSV}
+                  exportToPDF={exportToPDF} exportRelaysToCSV={exportRelaysToCSV} exportRelaysToExcel={exportRelaysToExcel}
                   downloadRelayImportTemplate={downloadRelayImportTemplate}
                   setSelectedRelay={setSelectedRelay} setIsDirty={setIsDirty}
                   printQRCode={printQRCode} handleDeleteRelay={handleDeleteRelay}

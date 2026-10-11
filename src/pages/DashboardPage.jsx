@@ -1,6 +1,18 @@
+import { useMemo } from 'react';
 import { StatCard } from '../components';
 
 export default function DashboardPage({ t, stats, stationRelays, visibleStations, globalNameCounts, relays, getRelayStatusFromDate, setActiveNav, setFilterStatus, setSearchQuery, setViewStation }) {
+  // O(n) — bir marta hisoblash, har bir stansiya uchun alohida filter emas
+  const stationStats = useMemo(() => {
+    const map = {};
+    for (const r of relays) {
+      if (!map[r.stationId]) map[r.stationId] = { count: 0, expired: 0 };
+      map[r.stationId].count++;
+      if (getRelayStatusFromDate(r.nextCheck) === 'red') map[r.stationId].expired++;
+    }
+    return map;
+  }, [relays, getRelayStatusFromDate]);
+
   return (
     <div className="space-y-4 animate-fade-in">
       <div>
@@ -40,8 +52,7 @@ export default function DashboardPage({ t, stats, stationRelays, visibleStations
         <h3 className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2">{t('dashboard.byStation')}</h3>
         <div className="space-y-1">
           {visibleStations.map((s) => {
-            const count = relays.filter((r) => r.stationId === s.id).length;
-            const expired = relays.filter((r) => r.stationId === s.id && getRelayStatusFromDate(r.nextCheck) === 'red').length;
+            const ss = stationStats[s.id] || { count: 0, expired: 0 };
             return (
               <button key={s.id} type="button" onClick={() => setViewStation(s.id)}
                 style={{ touchAction: 'manipulation' }}
@@ -53,8 +64,8 @@ export default function DashboardPage({ t, stats, stationRelays, visibleStations
                   <p className="text-sm font-medium text-white truncate">{s.name}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <span className="text-sm font-bold text-white">{count}</span>
-                  {expired > 0 && <span className="ml-1.5 text-xs text-red-400">({expired}⚠)</span>}
+                  <span className="text-sm font-bold text-white">{ss.count}</span>
+                  {ss.expired > 0 && <span className="ml-1.5 text-xs text-red-400">({ss.expired}⚠)</span>}
                 </div>
               </button>
             );

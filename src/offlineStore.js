@@ -76,6 +76,18 @@ export function isTempId(id) {
   return typeof id === 'string' && id.startsWith('temp-');
 }
 
+// Parolni localStorage'da ochiq saqlashning oldini olish uchun
+// base64 obfuscation (bu kriptografik himoya emas, lekin plaintext'dan xavfsizroq)
+export function encodePassword(password) {
+  if (!password) return null;
+  try { return btoa(unescape(encodeURIComponent(password))); } catch { return null; }
+}
+
+export function decodePassword(encoded) {
+  if (!encoded) return null;
+  try { return decodeURIComponent(escape(atob(encoded))); } catch { return null; }
+}
+
 // ── Local state operations ────────────────────────────────────────────────────
 // Bu funksiyalar local cache'ni darhol yangilaydi (state setter'lar orqali)
 

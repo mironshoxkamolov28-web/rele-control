@@ -8,6 +8,7 @@ export default function LoginPage({
   loginPassword, setLoginPassword,
   showLoginPassword, setShowLoginPassword,
   loginError, handleLogin,
+  loginLoading,
 }) {
   return (
     <div className="bg-slate-950 text-slate-100 min-h-screen min-h-[100dvh] font-sans transition-colors duration-300 relative overflow-hidden">
@@ -82,7 +83,7 @@ export default function LoginPage({
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-white/60 uppercase tracking-wider">{t('common.station')}</label>
                     <select value={loginStation} onChange={(e) => setLoginStation(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-black outline-none transition focus:border-amber-500/50 focus:bg-white/10">
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500/50 focus:bg-white/10">
                       <optgroup label={t('nav.stations')}>
                         {stations.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </optgroup>
@@ -123,9 +124,14 @@ export default function LoginPage({
                   {loginError && (
                     <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{loginError}</div>
                   )}
-                  <button type="submit"
-                    className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98]">
-                    {t('login.submit')}
+                  <button type="submit" disabled={loginLoading}
+                    className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 text-sm font-bold text-slate-950 transition-all hover:shadow-lg hover:shadow-amber-500/25 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed">
+                    {loginLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                        {t('common.loading')}
+                      </span>
+                    ) : t('login.submit')}
                   </button>
                 </form>
               </div>

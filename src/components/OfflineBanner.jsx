@@ -1,79 +1,63 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getPendingQueue } from '../offlineStore.js';
-import { onSyncComplete } from '../syncManager.js';
-
-// Supabase health endpoint — haqiqiy internet bor-yo'qligini tekshiradi
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const PING_URL = `${SUPABASE_URL}/rest/v1/?apikey=${SUPABASE_KEY}`;
-const PING_INTERVAL = 4000; // har 4 soniya
-const PING_TIMEOUT = 3000;  // 3 soniya kutish
-
-async function checkRealConnectivity() {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), PING_TIMEOUT);
-    const res = await fetch(PING_URL, {
-      method: 'HEAD',
-      signal: controller.signal,
-      cache: 'no-store',
-    });
-    clearTimeout(timer);
-    return res.ok || res.status < 500;
-  } catch {
-    return false;
-  }
-}
+import { isOnline as checkIsOnline, onSyncComplete } from '../syncManager.js';
 
 /**
- * OfflineBanner — Haqiqiy internet holatini kuzatadi va ko'rsatadi.
- * navigator.onLine o'rniga har 4 soniyada real ping yuboradi.
+ * OfflineBanner — Internet holatini ko'rsatadi.
+ * syncManager'dagi isOnline() ni ishlatadi (alohida ping loop yo'q).
  *
  * - Offline: qizil banner
  * - Sinkronlanmoqda: sariq spinner
  * - Online (sync tugadi): yashil banner, 3 soniya ko'rinib yo'qoladi
  */
 export function OfflineBanner() {
-  const [isOnline, setIsOnline] = useState(true); // start optimistic
-  const [checked, setChecked] = useState(false);   // birinchi tekshiruv o'tganmi
+  const [online, setOnline] = useState(() => checkIsOnline());
   const [pendingCount, setPendingCount] = useState(() => getPendingQueue().length);
   const [syncing, setSyncing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const prevOnlineRef = useRef(true);
+  const prevOnlineRef = useRef(online);
+  const successTimerRef = useRef(null);
 
-  // ── Asosiy ping loop ────────────────────────────────────────────────────────
+  // ── Online/offline holatini kuzatish (syncManager bilan bir xil manba) ──────
   useEffect(() => {
-    let cancelled = false;
-
-    async function ping() {
-      const online = await checkRealConnectivity();
-      if (cancelled) return;
-
-      setChecked(true);
-      setIsOnline(online);
-
-      // Online → Offline o'tganda
-      if (!online && prevOnlineRef.current) {
-        setSyncing(false);
-        setShowSuccess(false);
-      }
-
-      // Offline → Online o'tganda → sync boshlash signali
-      if (online && !prevOnlineRef.current) {
+    function handleOnline() {
+      setOnline(true);
+      if (!prevOnlineRef.current) {
         setSyncing(true);
         setShowSuccess(false);
       }
-
-      prevOnlineRef.current = online;
+      prevOnlineRef.current = true;
+    }
+    function handleOffline() {
+      setOnline(false);
+      setSyncing(false);
+      setShowSuccess(false);
+      prevOnlineRef.current = false;
     }
 
-    // Darhol birinchi tekshiruv
-    ping();
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
-    // Keyin har 4 soniyada
-    const interval = setInterval(ping, PING_INTERVAL);
+    // Har 5 soniyada syncManager'dan tekshiramiz (dublikat ping emas, faqat qiymat o'qish)
+    const interval = setInterval(() => {
+      const nowOnline = checkIsOnline();
+      if (nowOnline !== prevOnlineRef.current) {
+        setOnline(nowOnline);
+        if (nowOnline && !prevOnlineRef.current) {
+          setSyncing(true);
+          setShowSuccess(false);
+        }
+        if (!nowOnline && prevOnlineRef.current) {
+          setSyncing(false);
+          setShowSuccess(false);
+        }
+        prevOnlineRef.current = nowOnline;
+      }
+    }, 5000);
+
     return () => {
-      cancelled = true;
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
   }, []);
@@ -85,11 +69,14 @@ export function OfflineBanner() {
       setPendingCount(getPendingQueue().length);
       if (synced > 0) {
         setShowSuccess(true);
-        const timer = setTimeout(() => setShowSuccess(false), 3500);
-        return () => clearTimeout(timer);
+        if (successTimerRef.current) clearTimeout(successTimerRef.current);
+        successTimerRef.current = setTimeout(() => setShowSuccess(false), 3500);
       }
     });
-    return unsub;
+    return () => {
+      unsub();
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
   }, []);
 
   // ── Pending count yangilash ─────────────────────────────────────────────────
@@ -100,16 +87,13 @@ export function OfflineBanner() {
     return () => clearInterval(interval);
   }, []);
 
-  // Birinchi tekshiruv tugagunicha hech narsa ko'rsatmaymiz
-  if (!checked) return null;
-
   // Online, sync yo'q, success yo'q, queue bo'sh → banner ko'rsatilmaydi
-  if (isOnline && !syncing && !showSuccess && pendingCount === 0) return null;
+  if (online && !syncing && !showSuccess && pendingCount === 0) return null;
 
   // ── Ko'rinish ───────────────────────────────────────────────────────────────
   let bgClass, icon, text;
 
-  if (!isOnline) {
+  if (!online) {
     bgClass = 'bg-red-600 border-red-700';
     icon = (
       <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -137,7 +121,7 @@ export function OfflineBanner() {
       </svg>
     );
     text = '✅ Sinkronizatsiya muvaffaqiyatli yakunlandi';
-  } else if (isOnline && pendingCount > 0) {
+  } else if (online && pendingCount > 0) {
     bgClass = 'bg-yellow-500 border-yellow-600';
     icon = (
       <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

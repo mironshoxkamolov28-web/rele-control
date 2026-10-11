@@ -8,6 +8,7 @@ import {
   removePendingItem,
   clearPendingQueue,
   isTempId,
+  decodePassword,
 } from './offlineStore.js';
 
 // ── Sync callback registratsiyasi ─────────────────────────────────────────────
@@ -121,6 +122,14 @@ async function syncRelayOp(item, tempIdMap) {
     return true;
   }
 
+  if (op === 'bulk-update') {
+    const realId = isTempId(data.id) ? tempIdMap[data.id] : data.id;
+    if (!realId) return false;
+    const { error } = await supabase.from('relays').update(data.updates).eq('id', realId);
+    if (error) { console.warn('[sync] relay bulk-update error:', error); return false; }
+    return true;
+  }
+
   return false;
 }
 
@@ -135,7 +144,8 @@ async function syncStationOp(item, _tempIdMap) {
     });
     if (insErr) { console.warn('[sync] station insert error:', insErr); return false; }
     if (data._password) {
-      await supabase.rpc('set_station_password', { p_id: data.id, p_password: data._password });
+      const pw = decodePassword(data._password) || data._password;
+      await supabase.rpc('set_station_password', { p_id: data.id, p_password: pw });
     }
     return true;
   }
@@ -146,7 +156,8 @@ async function syncStationOp(item, _tempIdMap) {
       .eq('id', data.id);
     if (error) { console.warn('[sync] station update error:', error); return false; }
     if (data._password) {
-      await supabase.rpc('set_station_password', { p_id: data.id, p_password: data._password });
+      const pw = decodePassword(data._password) || data._password;
+      await supabase.rpc('set_station_password', { p_id: data.id, p_password: pw });
     }
     return true;
   }
@@ -197,7 +208,8 @@ async function syncMexanikOp(item, _tempIdMap) {
     });
     if (error) { console.warn('[sync] mexanik insert error:', error); return false; }
     if (data._password) {
-      await supabase.rpc('set_mexanik_password', { p_id: data.id, p_password: data._password });
+      const pw = decodePassword(data._password) || data._password;
+      await supabase.rpc('set_mexanik_password', { p_id: data.id, p_password: pw });
     }
     return true;
   }
@@ -208,7 +220,8 @@ async function syncMexanikOp(item, _tempIdMap) {
       .eq('id', data.id);
     if (error) { console.warn('[sync] mexanik update error:', error); return false; }
     if (data._password) {
-      await supabase.rpc('set_mexanik_password', { p_id: data.id, p_password: data._password });
+      const pw = decodePassword(data._password) || data._password;
+      await supabase.rpc('set_mexanik_password', { p_id: data.id, p_password: pw });
     }
     return true;
   }

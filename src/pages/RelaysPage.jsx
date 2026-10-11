@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { statusConfig, qrUrl } from '../relayHelpers.js';
+import { ConfirmModal } from '../components';
 
 export default function RelaysPage({
   t, auth, pagedRelays, visibleRelays, stations, getStationName,
@@ -9,10 +10,11 @@ export default function RelaysPage({
   selectedRelayIds, setSelectedRelayIds, setBulkEditOpen,
   relayPage, setRelayPage, relayPageCount, relayPageSize, setRelayPageSize,
   importFileInputRef, handleRelayImportFile,
-  exportToPDF, exportRelaysToCSV, downloadRelayImportTemplate,
+  exportToPDF, exportRelaysToCSV, exportRelaysToExcel, downloadRelayImportTemplate,
   setSelectedRelay, setIsDirty, printQRCode, handleDeleteRelay,
 }) {
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const [deleteConfirmRelay, setDeleteConfirmRelay] = useState(null);
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -24,6 +26,10 @@ export default function RelaysPage({
 
         {/* Desktop actions */}
         <div className="hidden sm:flex items-center gap-2 flex-wrap">
+          <button onClick={exportRelaysToExcel}
+            className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-400 transition hover:bg-blue-500/20">
+            Excel Eksport
+          </button>
           <button onClick={exportToPDF}
             className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/20">
             {t('common.pdfExport')}
@@ -42,7 +48,7 @@ export default function RelaysPage({
                 className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-2 text-xs font-semibold text-amber-400 transition hover:bg-amber-500/20">
                 {t('bulkImport.importButton')}
               </button>
-              <input ref={importFileInputRef} type="file" accept=".csv,text/csv" className="hidden"
+              <input ref={importFileInputRef} type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   e.target.value = '';
@@ -66,6 +72,13 @@ export default function RelaysPage({
           </button>
           {mobileActionsOpen && (
             <div className="mt-2 glass rounded-xl p-2 space-y-1 animate-slide-down">
+              <button onClick={() => { exportRelaysToExcel(); setMobileActionsOpen(false); }}
+                className="w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium text-blue-400 transition hover:bg-blue-500/10 text-left">
+                <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                Excel Eksport
+              </button>
               <button onClick={() => { exportToPDF(); setMobileActionsOpen(false); }}
                 className="w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium text-red-400 transition hover:bg-red-500/10 text-left">
                 <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -96,7 +109,7 @@ export default function RelaysPage({
                     </svg>
                     {t('bulkImport.importButton')}
                   </button>
-                  <input ref={importFileInputRef} type="file" accept=".csv,text/csv" className="hidden"
+                  <input ref={importFileInputRef} type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       e.target.value = '';
@@ -216,7 +229,7 @@ export default function RelaysPage({
                         {t('common.qr')}
                       </button>
                       {auth?.id === 'admin' && (
-                        <button onClick={() => { if (confirm(t('relays.deleteConfirm', relay.name, relay.num))) handleDeleteRelay(relay.id); }}
+                        <button onClick={() => setDeleteConfirmRelay(relay)}
                           className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
                           {t('common.delete')}
                         </button>
@@ -294,7 +307,7 @@ export default function RelaysPage({
                       QR
                     </button>
                     {auth?.id === 'admin' && (
-                      <button onClick={() => { if (confirm(t('relays.deleteConfirm', relay.name, relay.num))) handleDeleteRelay(relay.id); }}
+                      <button onClick={() => setDeleteConfirmRelay(relay)}
                         className="rounded-lg bg-red-500/10 border border-red-500/20 px-2.5 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20 touch-sm">
                         {t('common.delete')}
                       </button>
@@ -344,6 +357,15 @@ export default function RelaysPage({
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!deleteConfirmRelay}
+        title={t('relays.deleteConfirmTitle') || t('common.delete')}
+        message={deleteConfirmRelay ? t('relays.deleteConfirm', deleteConfirmRelay.name, deleteConfirmRelay.num) : ''}
+        onConfirm={() => { handleDeleteRelay(deleteConfirmRelay.id); setDeleteConfirmRelay(null); }}
+        onCancel={() => setDeleteConfirmRelay(null)}
+        t={t}
+      />
     </div>
   );
 }
