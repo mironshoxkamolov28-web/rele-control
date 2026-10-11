@@ -10,7 +10,7 @@ export default function RelaysPage({
   selectedRelayIds, setSelectedRelayIds, setBulkEditOpen,
   relayPage, setRelayPage, relayPageCount, relayPageSize, setRelayPageSize,
   importFileInputRef, handleRelayImportFile,
-  exportToPDF, exportRelaysToCSV, exportRelaysToExcel, downloadRelayImportTemplate,
+  exportToPDF, exportRelaysToCSV, exportRelaysToExcel, downloadRelayImportTemplate, downloadRelayImportTemplateXLSX,
   setSelectedRelay, setIsDirty, printQRCode, handleDeleteRelay,
 }) {
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
@@ -42,7 +42,11 @@ export default function RelaysPage({
             <>
               <button onClick={downloadRelayImportTemplate}
                 className="rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/20 hover:text-white">
-                {t('bulkImport.template')}
+                {t('bulkImport.template')} (CSV)
+              </button>
+              <button onClick={downloadRelayImportTemplateXLSX}
+                className="rounded-xl bg-teal-500/10 border border-teal-500/20 px-4 py-2 text-xs font-semibold text-teal-400 transition hover:bg-teal-500/20">
+                {t('bulkImport.template')} (XLSX)
               </button>
               <button onClick={() => importFileInputRef.current?.click()}
                 className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-2 text-xs font-semibold text-amber-400 transition hover:bg-amber-500/20">
@@ -100,7 +104,14 @@ export default function RelaysPage({
                     <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                     </svg>
-                    {t('bulkImport.template')}
+                    {t('bulkImport.template')} (CSV)
+                  </button>
+                  <button onClick={() => { downloadRelayImportTemplateXLSX(); setMobileActionsOpen(false); }}
+                    className="w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium text-teal-400 transition hover:bg-teal-500/10 text-left">
+                    <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                    </svg>
+                    {t('bulkImport.template')} (XLSX)
                   </button>
                   <button onClick={() => { importFileInputRef.current?.click(); setMobileActionsOpen(false); }}
                     className="w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium text-amber-400 transition hover:bg-amber-500/10 text-left">

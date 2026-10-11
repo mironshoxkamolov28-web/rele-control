@@ -1028,17 +1028,40 @@ export default function RelayDashboard() {
   };
 
   const exportRelaysToExcel = () => {
-    const rows = visibleRelays.map((r) => [r.name, r.num, getStationName(r.stationId), r.stativ, r.lastCheck, r.nextCheck, r.note]);
-    const worksheet = XLSX.utils.aoa_to_sheet([csvHeaders, ...rows]);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Relelar');
-    XLSX.writeFile(workbook, 'relelar.xlsx');
+
+    // 1-sheet: barcha relelar
+    const allRows = relays.map((r) => [r.name, r.num, getStationName(r.stationId), r.stativ || '', r.lastCheck || '', r.nextCheck || '', r.note || '']);
+    const allSheet = XLSX.utils.aoa_to_sheet([csvHeaders, ...allRows]);
+    XLSX.utils.book_append_sheet(workbook, allSheet, 'Barcha relelar');
+
+    // Har bir stansiya uchun alohida sheet
+    const activeStations = stations.filter((s) => s.id !== 'admin');
+    activeStations.forEach((station) => {
+      const stationRelays = relays.filter((r) => r.stationId === station.id);
+      if (stationRelays.length === 0) return;
+      const rows = stationRelays.map((r) => [r.name, r.num, getStationName(r.stationId), r.stativ || '', r.lastCheck || '', r.nextCheck || '', r.note || '']);
+      const sheet = XLSX.utils.aoa_to_sheet([csvHeaders, ...rows]);
+      // Sheet nomi max 31 ta belgidan oshmasligi kerak (Excel cheklovi)
+      const sheetName = station.name.slice(0, 31);
+      XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    });
+
+    XLSX.writeFile(workbook, 'barcha-relelar.xlsx');
   };
 
   const downloadRelayImportTemplate = () => {
     const example = ['RPU-3', '12345', stations.find((s) => s.id !== 'admin')?.name || '', '1-2', '2026-01-15', '2026-07-15', ''];
     const csv = [csvHeaders, example].map((row) => row.map(csvEscape).join(',')).join('\r\n');
     downloadTextFile('rele-shablon.csv', csv);
+  };
+
+  const downloadRelayImportTemplateXLSX = () => {
+    const example = ['RPU-3', '12345', stations.find((s) => s.id !== 'admin')?.name || '', '1-2', '2026-01-15', '2026-07-15', ''];
+    const worksheet = XLSX.utils.aoa_to_sheet([csvHeaders, example]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Shablon');
+    XLSX.writeFile(workbook, 'rele-shablon.xlsx');
   };
 
   const handleRelayImportFile = async (file) => {
@@ -1278,6 +1301,7 @@ export default function RelayDashboard() {
                   importFileInputRef={importFileInputRef} handleRelayImportFile={handleRelayImportFile}
                   exportToPDF={exportToPDF} exportRelaysToCSV={exportRelaysToCSV} exportRelaysToExcel={exportRelaysToExcel}
                   downloadRelayImportTemplate={downloadRelayImportTemplate}
+                  downloadRelayImportTemplateXLSX={downloadRelayImportTemplateXLSX}
                   setSelectedRelay={setSelectedRelay} setIsDirty={setIsDirty}
                   printQRCode={printQRCode} handleDeleteRelay={handleDeleteRelay}
                 />
