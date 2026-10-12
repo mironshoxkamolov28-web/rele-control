@@ -64,6 +64,10 @@ export default function RelayDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [publicRelay, setPublicRelay] = useState(null);
+  const [publicRelayLoading, setPublicRelayLoading] = useState(
+    () => /^\/relay\/\d+$/.test(window.location.pathname)
+  );
+  const [publicRelayNotFound, setPublicRelayNotFound] = useState(false);
   const [uchastkalar, setUchastkalar] = useState(() => getLocalData('uchastkalar') || []);
   const [mexaniklar, setMexaniklar] = useState(() => getLocalData('mexaniklar') || []);
   // Internet holati
@@ -167,17 +171,25 @@ export default function RelayDashboard() {
     const m = window.location.pathname.match(/^\/relay\/(\d+)$/);
     if (!m) return;
     const id = parseInt(m[1], 10);
+    setPublicRelayLoading(true);
     supabase
       .from('relays')
       .select('*, stations!station_id(name)')
       .eq('id', id)
       .single()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (data) {
           const relay = toRelay(data);
           relay.stationName = data.stations?.name || relay.stationId;
           setPublicRelay({ ...relay, status: getRelayStatusFromDate(relay.nextCheck) });
+        } else {
+          setPublicRelayNotFound(true);
         }
+        setPublicRelayLoading(false);
+      })
+      .catch(() => {
+        setPublicRelayNotFound(true);
+        setPublicRelayLoading(false);
       });
   }, []);
 
@@ -1158,6 +1170,22 @@ export default function RelayDashboard() {
   // ── Early returns ─────────────────────────────────────────────────────────
   if (loading && !/^\/relay\/\d+$/.test(window.location.pathname)) {
     return <LoadingScreen t={t} />;
+  }
+
+  if (publicRelayLoading) {
+    return <LoadingScreen t={t} />;
+  }
+
+  if (publicRelayNotFound) {
+    return (
+      <div className="bg-slate-950 text-slate-100 min-h-screen font-sans flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-white mb-2">Rele topilmadi</h2>
+          <p className="text-white/50">Bu QR kod eskirgan yoki rele o'chirilgan bo'lishi mumkin.</p>
+        </div>
+      </div>
+    );
   }
 
   if (publicRelay) {
